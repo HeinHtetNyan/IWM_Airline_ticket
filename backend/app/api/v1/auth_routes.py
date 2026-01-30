@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+
 from app.db.deps import get_db
-from app.schemas.auth import CustomerSignupIn, LoginIn, TokenOut
-from app.auth.security import hash_password, verify_password
+from app.schemas.auth import CustomerSignupIn, LoginIn, TokenOut, AdminSignupRequest, AdminOut
+from app.auth.security import get_password_hash, verify_password
 from app.auth.tokens import create_access_token
 from app.models.customer_user import CustomerUser
-from app.models.admin_user import AdminUser
-from fastapi.security import OAuth2PasswordRequestForm
+from app.crud.admin_auth import get_admin_by_email, create_admin, authenticate_admin
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# CUSTOMER
 @router.post("/customer/signup", response_model=TokenOut, status_code=201)
 def customer_signup(payload: CustomerSignupIn, db: Session = Depends(get_db)):
     email = payload.email.lower().strip()
@@ -20,7 +22,7 @@ def customer_signup(payload: CustomerSignupIn, db: Session = Depends(get_db)):
 
     user = CustomerUser(
         email=email,
-        password_hash=hash_password(payload.password),
+        password_hash=get_password_hash(payload.password),
         full_name=payload.full_name,
         phone=payload.phone,
         is_verified=False,
@@ -33,8 +35,14 @@ def customer_signup(payload: CustomerSignupIn, db: Session = Depends(get_db)):
     token = create_access_token(subject=str(user.id), role="CUSTOMER")
     return TokenOut(
         access_token=token,
-        user={"id": str(user.id), "email": user.email, "full_name": user.full_name, "phone": user.phone},
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone,
+        },
     )
+
 
 @router.post("/customer/login", response_model=TokenOut)
 def customer_login(payload: LoginIn, db: Session = Depends(get_db)):
@@ -49,26 +57,18 @@ def customer_login(payload: LoginIn, db: Session = Depends(get_db)):
     token = create_access_token(subject=str(user.id), role="CUSTOMER")
     return TokenOut(
         access_token=token,
-        user={"id": str(user.id), "email": user.email, "full_name": user.full_name, "phone": user.phone},
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone,
+        },
     )
 
-@router.post("/admin/login", response_model=TokenOut)
-def admin_login(payload: LoginIn, db: Session = Depends(get_db)):
-    email = payload.email.lower().strip()
-
-    user = db.query(AdminUser).filter(AdminUser.email == email).first()
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Admin is inactive")
-
-    token = create_access_token(subject=str(user.id), role="ADMIN")
-    return TokenOut(access_token=token, user={"id": str(user.id), "email": user.email})
 
 @router.post("/customer/token", response_model=TokenOut)
 def customer_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # Swagger sends username/password
-    email = form_data.username
+    email = form_data.username.lower().strip()
     password = form_data.password
 
     user = db.query(CustomerUser).filter(CustomerUser.email == email).first()
@@ -80,5 +80,56 @@ def customer_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session
     token = create_access_token(subject=str(user.id), role="CUSTOMER")
     return TokenOut(
         access_token=token,
-        user={"id": str(user.id), "email": user.email, "full_name": user.full_name, "phone": user.phone},
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone,
+        },
     )
+
+
+# ADMIN
+@router.post("/admin/signup", response_model=AdminOut, status_code=201)
+def admin_signup(payload: AdminSignupRequest, db: Session = Depends(get_db)):
+    existing = get_admin_by_email(db, payload.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    role = payload.role if payload.role in ("STAFF", "SUPER_ADMIN") else "STAFF"
+
+    admin = create_admin(
+        db=db,
+        name=payload.name,
+        email=payload.email,
+        password=payload.password,
+        role=role,
+    )
+
+    return AdminOut(
+        id=str(admin.id),
+        name=admin.name,
+        email=admin.email,
+        role=admin.role,
+        is_active=admin.is_active,
+    )
+
+
+@router.post("/admin/token")
+def admin_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    admin = authenticate_admin(db, form_data.username, form_data.password)
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+
+    access_token = create_access_token(subject=str(admin.id), role="ADMIN")
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "admin": {
+            "id": str(admin.id),
+            "name": admin.name,
+            "email": admin.email,
+            "role": admin.role,
+        },
+    }

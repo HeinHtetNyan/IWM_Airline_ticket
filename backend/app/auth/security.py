@@ -1,9 +1,8 @@
 from passlib.context import CryptContext
 
-# pbkdf2_sha256 avoids bcrypt native issues and has no 72-byte limit problem
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
-def hash_password(password: str) -> str:
+def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(password: str, password_hash: str) -> bool:

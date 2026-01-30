@@ -3,7 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.db.session import engine
 from app.models.base import Base
-from app.models import admin_user, customer_user  # noqa: F401
+from app.models import admin_user, customer_user 
 
 
 from app.db.deps import get_db

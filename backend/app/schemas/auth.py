@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, Any
 from pydantic import field_validator
 
@@ -47,3 +47,21 @@ class LoginIn(BaseModel):
         if len(v.encode("utf-8")) > 72:
             raise ValueError("Password too long (max 72 bytes)")
         return v
+
+# Admin
+class AdminSignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    role: str = "STAFF"
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    password: str
+
+class AdminOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    is_active: bool
