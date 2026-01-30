@@ -1,8 +1,12 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
+from pydantic import field_validator
+
 
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: Dict[str, Any]
 
 class CustomerSignupIn(BaseModel):
     email: str
