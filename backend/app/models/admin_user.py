@@ -3,7 +3,7 @@ from sqlalchemy import String, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.db.base import Base
 
 class AdminUser(Base):
     __tablename__ = "admin_users"

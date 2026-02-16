@@ -8,67 +8,51 @@ from app.db.deps import get_db
 from app.auth.deps import get_current_customer
 from app.models.booking import Booking
 from app.models.customer_user import CustomerUser
-from app.models.flight import Flight
-
-from app.schemas.flight import UserFlightOut
-from app.services.external_flight_api import fetch_flights_from_external_api
-from app.crud.flight_sync import sync_flights_from_api
+from app.schemas.booking import BookingCreate
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
-
-
-# User flight search
-@router.get("/search", response_model=List[UserFlightOut])
-def search_flights(
-    origin: str,
-    destination: str,
-    departure_date: str,
-    db: Session = Depends(get_db),
-):
-    # Call external flight API
-    api_flights = fetch_flights_from_external_api(
-        origin=origin,
-        destination=destination,
-        departure_date=departure_date,
-    )
-
-    # ync API flights into DB
-    sync_flights_from_api(db, api_flights=api_flights)
-
-    # Apply admin filters
-    flights = (
-        db.query(Flight)
-        .filter(
-            Flight.origin == origin,
-            Flight.destination == destination,
-            Flight.is_published == True,
-            Flight.is_visible == True,
-            Flight.is_available == True,
-        )
-        .order_by(Flight.departure_time)
-        .all()
-    )
-
-    return flights
 
 
 # Booking creation
 @router.post("/")
 def create_booking(
+    payload: BookingCreate,
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
 ):
+    from datetime import datetime
+
+    departure_date = datetime.fromisoformat(
+        payload.departure_time
+    ).date()
+
     booking = Booking(
         customer_id=current_user.id,
+        airline_code=payload.airline_code,
+        flight_number=payload.flight_number,
+        origin=payload.origin,
+        destination=payload.destination,
+        departure_date=departure_date,
+        departure_time=payload.departure_time,
+        arrival_time=payload.arrival_time,
+        final_price_usd=payload.final_price_usd,
+        final_price_mmk=payload.final_price_mmk,
         status="PROCESSING",
     )
+
     db.add(booking)
     db.commit()
     db.refresh(booking)
 
     return {
         "booking_id": booking.id,
-        "customer_id": booking.customer_id,
+        "airline_code": booking.airline_code,
+        "flight_number": booking.flight_number,
+        "origin": booking.origin,
+        "destination": booking.destination,
+        "departure_time": booking.departure_time,
+        "arrival_time": booking.arrival_time,
+        "final_price_usd": booking.final_price_usd,
         "status": booking.status,
     }
 
@@ -89,7 +73,15 @@ def list_my_bookings(
     return [
         {
             "booking_id": b.id,
-            "customer_id": b.customer_id,
+            "airline_code": b.airline_code,
+            "flight_number": b.flight_number,
+            "origin": b.origin,
+            "destination": b.destination,
+            "departure_date": b.departure_date,
+            "departure_time": b.departure_time,
+            "arrival_time": b.arrival_time,
+            "final_price_usd": b.final_price_usd,
+            "final_price_mmk": b.final_price_mmk,
             "status": b.status,
         }
         for b in bookings
@@ -120,6 +112,15 @@ def get_my_booking_detail(
 
     return {
         "booking_id": booking.id,
-        "customer_id": booking.customer_id,
+        "airline_code": booking.airline_code,
+        "flight_number": booking.flight_number,
+        "origin": booking.origin,
+        "destination": booking.destination,
+        "departure_date": booking.departure_date,
+        "departure_time": booking.departure_time,
+        "arrival_time": booking.arrival_time,
+        "final_price_usd": booking.final_price_usd,
+        "final_price_mmk": booking.final_price_mmk,
         "status": booking.status,
     }
+

@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    TICKET_API_KEY: str
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

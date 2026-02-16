@@ -36,7 +36,8 @@ class UserFlightOut(BaseModel):
     destination: str
     departure_time: datetime
     arrival_time: datetime
-    base_price_usd: float
+    final_price_usd: float | None
 
     class Config:
         from_attributes = True
+

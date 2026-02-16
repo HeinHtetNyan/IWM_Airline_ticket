@@ -1,41 +1,9 @@
-from datetime import datetime
+import httpx
 from typing import List, Dict
-from uuid import uuid4
+from app.core.config import settings
 
-
-def _parse_route(route: str) -> tuple[str, str]:
-    origin, destination = route.split("→")
-    return origin.strip(), destination.strip()
-
-
-def _to_int(value) -> int:
-    try:
-        return int(value)
-    except Exception:
-        return 0
-
-
-def _map_flight(item: Dict, *, price_usd: float, external_flight_id: str) -> Dict:
-    origin, destination = _parse_route(item["route"])
-
-    return {
-        # internal id
-        "id": str(uuid4()),
-
-        # stable identity from external API
-        "external_flight_id": external_flight_id,
-
-        # core flight data
-        "airline_code": item["airlineCode"],
-        "flight_number": item["flightNumber"],
-        "origin": origin,
-        "destination": destination,
-        "departure_time": datetime.fromisoformat(item["departTime"]),
-        "arrival_time": datetime.fromisoformat(item["arriveTime"]),
-
-        # pricing
-        "base_price_usd": float(price_usd),
-    }
+RAPIDAPI_URL = "https://ago-travel.p.rapidapi.com/flights/search-one-way"
+RAPIDAPI_HOST = "ago-travel.p.rapidapi.com"
 
 
 def fetch_flights_from_external_api(
@@ -44,45 +12,133 @@ def fetch_flights_from_external_api(
     destination: str,
     departure_date: str,
 ) -> List[Dict]:
-    """
-    Adapter for Agoda VibePro API.
-    This function must return normalized flight dictionaries.
-    """
 
-    # replace this with the real HTTP API call
-    raw_response = get_external_api_response()
+    headers = {
+        "x-rapidapi-host": RAPIDAPI_HOST,
+        "x-rapidapi-key": settings.TICKET_API_KEY,
+    }
 
-    flights: List[Dict] = []
+    all_flights: List[Dict] = []
+    page = 1
 
-    for item in raw_response:
-        # One-way flight
-        if "outbound" not in item:
-            flights.append(
-                _map_flight(
-                    item,
-                    price_usd=item["priceUSD"],
-                    external_flight_id=f'{item["flightNumber"]}-{item["departTime"]}',
-                )
+    while True:
+
+        params = {
+            "origin": origin.upper(),
+            "destination": destination.upper(),
+            "departureDate": departure_date,
+            "page": page,
+        }
+
+        with httpx.Client(timeout=30.0) as client:
+            response = client.get(RAPIDAPI_URL, headers=headers, params=params)
+
+        if response.status_code != 200:
+            print("❌ API error:", response.text)
+            break
+
+        data = response.json()
+        bundles = data.get("data", {}).get("bundles", [])
+
+        print(f"PAGE {page} → bundles:", len(bundles))
+
+        if not bundles:
+            break
+
+        for bundle in bundles:
+
+            # SEGMENT
+            outbound_slice = bundle.get("outboundSlice", {})
+            segments = outbound_slice.get("segments", [])
+
+            if not segments:
+                continue
+
+            first_segment = segments[0]
+
+            # ITINERARY INFO
+            itineraries = bundle.get("itineraries", [])
+            if not itineraries:
+                continue
+
+            itinerary_info = itineraries[0].get("itineraryInfo", {})
+
+            # AIRLINE
+            airline_code = itinerary_info.get("ticketingAirline")
+
+            carrier_content = itinerary_info.get("ticketingCarrierContent", {})
+            airline_name = carrier_content.get("carrierName")
+
+            # PRICE (FIXED PATH)
+            price = (
+                itinerary_info
+                .get("price", {})
+                .get("usd", {})
+                .get("display", {})
+                .get("averagePerPax", {})
+                .get("allInclusive")
             )
 
-        # Round-trip bundle
-        else:
-            bundle_key = item["bundleKey"]
+            if price is None:
+                continue
 
-            flights.append(
-                _map_flight(
-                    item["outbound"],
-                    price_usd=item["priceUSD"],
-                    external_flight_id=f"{bundle_key}-OUT",
-                )
+            # BAGGAGE (FINAL FIXED VERSION)
+
+            free_bags = outbound_slice.get("freeBags", [])
+
+            carry_on_kg = 0
+            checked_kg = 0
+
+            for bag in free_bags:
+                baggage_type = bag.get("baggageType")
+                restrictions = bag.get("restrictions", [])
+
+                if restrictions and isinstance(restrictions, list):
+                    value = restrictions[0].get("value")
+
+                    if baggage_type == "CARRY_ON" and value:
+                        carry_on_kg = value
+
+                    if baggage_type == "CHECKED" and value:
+                        checked_kg = value
+
+            baggage_fee = first_segment.get("baggageFee")
+
+            baggage_url = (
+                itinerary_info
+                .get("baggageUrlWithScope", {})
+                .get("baggageUrls", [{}])[0]
+                .get("url")
             )
 
-            flights.append(
-                _map_flight(
-                    item["inbound"],
-                    price_usd=item["priceUSD"],
-                    external_flight_id=f"{bundle_key}-IN",
-                )
-            )
+            # BUILD FLIGHT
+            flight = {
+                "external_flight_id": itinerary_info.get("externalItineraryId"),
+                "airline": airline_name,
+                "airline_code": airline_code,
+                "flight_number": first_segment.get("flightNumber"),
 
-    return flights
+                "origin": origin.upper(),
+                "destination": destination.upper(),
+                "route": f"{origin.upper()} → {destination.upper()}",
+
+                "departure_time": first_segment.get("departDateTime"),
+                "arrival_time": first_segment.get("arrivalDateTime"),
+
+                "duration_minutes": first_segment.get("duration"),
+
+                "baggage_carry_on_kg": carry_on_kg,
+                "baggage_checked_kg": checked_kg,
+                "baggage_fee": baggage_fee,
+                "baggage_info_url": baggage_url,
+
+                "base_price_usd": float(price),
+            }
+
+            all_flights.append(flight)
+
+        page += 1
+        break  # only first page for now becoz i am not sure how to call other pages ;)
+
+    print("TOTAL FETCHED:", len(all_flights))
+    return all_flights
