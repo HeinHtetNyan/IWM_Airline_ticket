@@ -29,7 +29,7 @@ def admin_update_flight(
     return flight
 
 
-# used later by API sync (NOT admin)
+# API sync
 def mark_flight_seen(db: Session, flight: Flight):
     flight.last_seen_at = datetime.utcnow()
     flight.is_available = True

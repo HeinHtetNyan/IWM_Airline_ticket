@@ -121,7 +121,10 @@ def admin_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     if not admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    access_token = create_access_token(subject=str(admin.id), role="ADMIN")
+    access_token = create_access_token(
+    subject=str(admin.id),
+    role=admin.role
+    )
 
     return {
         "access_token": access_token,

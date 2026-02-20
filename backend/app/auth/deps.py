@@ -31,7 +31,6 @@ def get_current_customer(
 
     return user
 
-
 def get_current_admin(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
@@ -43,7 +42,8 @@ def get_current_admin(
     admin_id = payload.get("sub")
     role = payload.get("role")
 
-    if not admin_id or role != "ADMIN":
+    # Allow both ADMIN and SUPER_ADMIN
+    if not admin_id or role not in {"ADMIN", "SUPER_ADMIN"}:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
     admin = db.query(AdminUser).filter(AdminUser.id == admin_id).first()
@@ -54,4 +54,20 @@ def get_current_admin(
     return admin
 
 
-require_admin = get_current_admin
+def require_admin(
+    admin: AdminUser = Depends(get_current_admin),
+) -> AdminUser:
+    return admin
+
+
+def require_super_admin(
+    admin: AdminUser = Depends(get_current_admin),
+) -> AdminUser:
+
+    if admin.role != "SUPER_ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin privileges required",
+        )
+
+    return admin
