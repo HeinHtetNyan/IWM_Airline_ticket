@@ -1,8 +1,27 @@
+# Secrets / Env
 .env
+.env.*
+*.env
+
+# Python junk
 __pycache__/
 *.pyc
-.env.local
-.vscode/
-node_modules/
-postgres_data/
+*.pyo
+*.pyd
+.Python
 venv/
+env/
+
+# Docker junk
+*.log
+docker-compose.override.yml
+
+# IDE / Editor junk
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS junk
+.DS_Store
+Thumbs.db
