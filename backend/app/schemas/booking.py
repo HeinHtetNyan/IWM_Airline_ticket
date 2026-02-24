@@ -41,6 +41,10 @@ class BookingOut(BaseModel):
     # Passengers
     passengers: Optional[List[PassengerOut]] = None
 
+    # Admin lifecycle tracking
+    outbound_completed: Optional[bool] = None
+    inbound_completed: Optional[bool] = None
+
     class Config:
         from_attributes = True
 

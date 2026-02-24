@@ -23,32 +23,83 @@ def auto_complete_bookings(db: Session):
         except Exception:
             continue
 
-        departure_time_str = snapshot.get("departure_time")
-        origin = snapshot.get("origin")
+        # ONE WAY
+        if booking.type == "ONE_WAY":
 
-        if not departure_time_str or not origin:
-            continue
+            departure_time_str = snapshot.get("departure_time")
+            origin = snapshot.get("origin")
 
-        airport = db.query(Airport).filter(Airport.code == origin).first()
-        if not airport:
-            # If airport timezone unknown → skip safely
-            continue
+            if not departure_time_str or not origin:
+                continue
 
-        try:
-            local_naive = datetime.fromisoformat(departure_time_str)
+            airport = db.query(Airport).filter(Airport.code == origin).first()
+            if not airport:
+                continue
 
-            local_aware = local_naive.replace(
-                tzinfo=ZoneInfo(airport.timezone)
-            )
+            try:
+                local_naive = datetime.fromisoformat(departure_time_str)
+                local_aware = local_naive.replace(
+                    tzinfo=ZoneInfo(airport.timezone)
+                )
+                departure_utc = local_aware.astimezone(timezone.utc)
+            except Exception:
+                continue
 
-            departure_utc = local_aware.astimezone(timezone.utc)
+            if departure_utc < now_utc:
+                booking.status = "COMPLETED"
+                completed_count += 1
 
-        except Exception:
-            continue
+        # ROUND TRIP
+        elif booking.type == "ROUND_TRIP":
 
-        if departure_utc < now_utc:
-            booking.status = "COMPLETED"
-            completed_count += 1
+            # OUTBOUND
+            outbound = snapshot.get("outbound")
+
+            if outbound and not booking.outbound_completed:
+                dep_str = outbound.get("departure_time")
+                origin = outbound.get("origin")
+
+                if dep_str and origin:
+                    airport = db.query(Airport).filter(Airport.code == origin).first()
+                    if airport:
+                        try:
+                            local_naive = datetime.fromisoformat(dep_str)
+                            local_aware = local_naive.replace(
+                                tzinfo=ZoneInfo(airport.timezone)
+                            )
+                            departure_utc = local_aware.astimezone(timezone.utc)
+
+                            if departure_utc < now_utc:
+                                booking.outbound_completed = True
+                        except Exception:
+                            pass
+
+            # INBOUND
+            inbound = snapshot.get("inbound")
+
+            if inbound and not booking.inbound_completed:
+                dep_str = inbound.get("departure_time")
+                origin = inbound.get("origin")
+
+                if dep_str and origin:
+                    airport = db.query(Airport).filter(Airport.code == origin).first()
+                    if airport:
+                        try:
+                            local_naive = datetime.fromisoformat(dep_str)
+                            local_aware = local_naive.replace(
+                                tzinfo=ZoneInfo(airport.timezone)
+                            )
+                            departure_utc = local_aware.astimezone(timezone.utc)
+
+                            if departure_utc < now_utc:
+                                booking.inbound_completed = True
+                        except Exception:
+                            pass
+
+            # If both in/outbound completed → mark whole booking completed
+            if booking.outbound_completed and booking.inbound_completed:
+                booking.status = "COMPLETED"
+                completed_count += 1
 
     db.commit()
 

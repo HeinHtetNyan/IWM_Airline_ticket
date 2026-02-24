@@ -226,6 +226,8 @@ def get_booking_detail(
         payment_status=booking.payment_status,
         created_at=booking.created_at,
         passengers=booking.passengers,
+        outbound_completed=booking.outbound_completed,
+        inbound_completed=booking.inbound_completed,
     )
 
 

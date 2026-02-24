@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     UniqueConstraint,
     Sequence,
+    Boolean
 )
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -69,6 +70,19 @@ class Booking(Base):
 
     final_price_usd: Mapped[float] = mapped_column(Float, nullable=False)
     final_price_mmk: Mapped[float] = mapped_column(Float, nullable=False)
+
+    # Lifecycle Tracking in/outbound for round trip
+    outbound_completed: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
+
+    inbound_completed: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+    )
 
     # Status
     status: Mapped[str] = mapped_column(
