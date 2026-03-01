@@ -65,8 +65,8 @@ services:
     container_name: air-nginx
     restart: unless-stopped
     ports:
-      - "3000:3000"   # frontend
-      - "8080:8080"   # backend gateway
+      - "8080:80"   # staging
+      
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./frontend/build:/usr/share/nginx/html:ro
