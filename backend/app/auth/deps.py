@@ -42,8 +42,8 @@ def get_current_admin(
     admin_id = payload.get("sub")
     role = payload.get("role")
 
-    # Allow both ADMIN and SUPER_ADMIN
-    if not admin_id or role not in {"ADMIN", "SUPER_ADMIN"}:
+    # Allow both STAFF and SUPER_ADMIN
+    if not admin_id or role not in {"STAFF", "SUPER_ADMIN"}:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
     admin = db.query(AdminUser).filter(AdminUser.id == admin_id).first()

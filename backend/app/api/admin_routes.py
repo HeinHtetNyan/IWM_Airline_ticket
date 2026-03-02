@@ -38,6 +38,8 @@ from app.crud.flight_override import (
     delete_override
 )
 
+from app.models.exchange_rate import ExchangeRate
+
 from app.services.booking_auto_cancel import auto_cancel_expired_bookings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -402,4 +404,47 @@ def get_booking_audit(
             "uploaded_at": booking.ticket_uploaded_at,
             "uploaded_by": get_admin_info(booking.ticket_uploaded_by_admin_id),
         },
+    }
+
+@router.get("/exchange-rate")
+def get_exchange_rate(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_admin),
+):
+    rate = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
+
+    if not rate:
+        raise HTTPException(
+            status_code=404,
+            detail="Exchange rate not configured"
+        )
+
+    return {
+        "usd_to_mmk": rate.usd_to_mmk,
+        "created_at": rate.created_at,
+    }
+
+@router.put("/exchange-rate")
+def update_exchange_rate(
+    new_rate: float,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_super_admin),
+):
+    if new_rate <= 0:
+        raise HTTPException(status_code=400, detail="Rate must be positive")
+
+    rate = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
+
+    if not rate:
+        rate = ExchangeRate(id=1, usd_to_mmk=new_rate)
+        db.add(rate)
+    else:
+        rate.usd_to_mmk = new_rate
+
+    db.commit()
+    db.refresh(rate)
+
+    return {
+        "message": "Exchange rate updated",
+        "usd_to_mmk": rate.usd_to_mmk
     }
