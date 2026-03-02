@@ -13,6 +13,7 @@ from app.auth.deps import (
 from app.db.deps import get_db
 from app.models.booking import Booking
 from app.models.admin_user import AdminUser
+from app.schemas.common import ExchangeRateUpdate
 
 from app.schemas.booking import (
     BookingStatusUpdate,
@@ -405,7 +406,7 @@ def get_booking_audit(
             "uploaded_by": get_admin_info(booking.ticket_uploaded_by_admin_id),
         },
     }
-# Exchange rate GET
+# EXCHANGE RATE (ADMIN CONFIG)
 @router.get("/exchange-rate")
 def get_exchange_rate(
     db: Session = Depends(get_db),
@@ -424,28 +425,25 @@ def get_exchange_rate(
         "created_at": rate.created_at,
     }
 
-# Exchange rate PUT(SUPER ADMIN ONLY)
+
 @router.put("/exchange-rate")
 def update_exchange_rate(
-    new_rate: float,
+    payload: ExchangeRateUpdate,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_super_admin),
 ):
-    if new_rate <= 0:
-        raise HTTPException(status_code=400, detail="Rate must be positive")
-
     rate = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
 
     if not rate:
-        rate = ExchangeRate(id=1, usd_to_mmk=new_rate)
+        rate = ExchangeRate(id=1, usd_to_mmk=payload.usd_to_mmk)
         db.add(rate)
     else:
-        rate.usd_to_mmk = new_rate
+        rate.usd_to_mmk = payload.usd_to_mmk
 
     db.commit()
     db.refresh(rate)
 
     return {
-        "message": "Exchange rate updated",
-        "usd_to_mmk": rate.usd_to_mmk
+        "message": "Exchange rate updated successfully",
+        "usd_to_mmk": rate.usd_to_mmk,
     }
