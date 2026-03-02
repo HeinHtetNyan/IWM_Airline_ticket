@@ -405,7 +405,7 @@ def get_booking_audit(
             "uploaded_by": get_admin_info(booking.ticket_uploaded_by_admin_id),
         },
     }
-
+# Exchange rate GET
 @router.get("/exchange-rate")
 def get_exchange_rate(
     db: Session = Depends(get_db),
@@ -424,6 +424,7 @@ def get_exchange_rate(
         "created_at": rate.created_at,
     }
 
+# Exchange rate PUT(SUPER ADMIN ONLY)
 @router.put("/exchange-rate")
 def update_exchange_rate(
     new_rate: float,
