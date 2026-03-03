@@ -1,41 +1,33 @@
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from fastapi import FastAPI, Depends
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import OperationalError
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 
-from app.db.session import engine, SessionLocal
+from app.api.flight_routes import router as flight_router
+from app.api.router import api_router
 from app.db.base import Base
 from app.db.deps import get_db
-
+from app.db.session import SessionLocal, engine
 from app.models.admin_user import AdminUser
-from app.models.customer_user import CustomerUser
 from app.models.booking import Booking
+from app.models.customer_user import CustomerUser
 from app.models.flight_override import FlightOverride
-
 from app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from app.services.booking_auto_complete import auto_complete_bookings
-
-from app.api.router import api_router
-from app.api.flight_routes import router as flight_router
-
-
-app = FastAPI(title="Air Ticket Booking API")
 
 scheduler = BackgroundScheduler()
 
 
-# LIFECYCLE JOB
 def lifecycle_job():
     db = SessionLocal()
     try:
-        # Auto Cancel PROCESSING → CANCELLED
         cancel_result = auto_cancel_expired_bookings(db, expire_minutes=30)
-
-        # Auto Complete CONFIRMED → COMPLETED
         complete_result = auto_complete_bookings(db)
 
         print(
@@ -43,18 +35,14 @@ def lifecycle_job():
             f"Cancelled: {cancel_result['cancelled_count']} | "
             f"Completed: {complete_result['completed']}"
         )
-
     except Exception as e:
         print(f"[LIFECYCLE ERROR] {e}")
-
     finally:
         db.close()
 
 
-# STARTUP
-@app.on_event("startup")
-def on_startup():
-    # Wait for DB
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     max_retries = 10
     for attempt in range(max_retries):
         try:
@@ -67,25 +55,37 @@ def on_startup():
     else:
         raise RuntimeError("Could not connect to database")
 
-    # Start Scheduler
     if not scheduler.running:
         scheduler.add_job(
             lifecycle_job,
             "interval",
-            minutes=5,  # runs every 5 minutes
+            minutes=5,
             id="lifecycle_job",
             replace_existing=True,
         )
         scheduler.start()
         print("Lifecycle scheduler started (every 5 minutes)")
 
+    yield
 
-# ROUTERS
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="Air Ticket Booking API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(api_router)
 app.include_router(flight_router, prefix="/api")
 
 
-# HEALTH
 @app.get("/")
 def root():
     return {"message": "FastAPI running in Docker"}
@@ -94,9 +94,3 @@ def root():
 @app.get("/db-check")
 def db_check(db: Session = Depends(get_db)):
     return {"ok": bool(db.execute(text("SELECT 1")).scalar())}
-
-
-@app.on_event("shutdown")
-def on_shutdown():
-    if scheduler.running:
-        scheduler.shutdown(wait=False)

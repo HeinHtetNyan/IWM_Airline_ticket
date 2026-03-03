@@ -1,5 +1,4 @@
 import json
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
@@ -15,20 +14,14 @@ from app.models.booking_passenger import BookingPassenger as Passenger
 from app.models.customer_user import CustomerUser
 from app.schemas.booking import BookingCreate, BookingOut
 from app.schemas.passenger import PassengerBulkCreate, PassengerOut
+from app.services.pricing_engine import calculate_booking_totals
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
-def _to_decimal(value: object) -> Decimal:
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid price in flight_snapshot")
-
-
 def _validate_snapshot(payload: BookingCreate) -> dict:
     snapshot = payload.flight_snapshot
-    required_common = {"final_price_usd", "final_price_mmk"}
+    required_common = {"base_price_usd"}
     missing = [k for k in required_common if snapshot.get(k) is None]
 
     if payload.type == "ONE_WAY":
@@ -56,13 +49,15 @@ def create_booking(
 ):
     snapshot = _validate_snapshot(payload)
 
-    # Server-side pricing from immutable snapshot values.
-    snapshot_price_usd = _to_decimal(snapshot.get("final_price_usd"))
-    snapshot_price_mmk = _to_decimal(snapshot.get("final_price_mmk"))
+    # Always recalculate pricing on the server from trusted pricing rules.
+    calculated = calculate_booking_totals(db, snapshot, payload.adults, payload.type)
 
-    adults = Decimal(payload.adults)
-    calculated_total_usd = (snapshot_price_usd * adults).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    calculated_total_mmk = (snapshot_price_mmk * adults).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    snapshot["base_price_usd"] = float(calculated["base_price_usd"])
+    snapshot["final_price_usd"] = float(calculated["final_price_usd"])
+    snapshot["final_price_mmk"] = float(calculated["final_price_mmk"])
+
+    calculated_total_usd = calculated["final_price_usd"]
+    calculated_total_mmk = calculated["final_price_mmk"]
 
     # Anti-spam only when key exists.
     if payload.bundle_key:

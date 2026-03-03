@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -13,6 +13,13 @@ GLOBAL_MARKUP_PERCENT = Decimal("15")
 
 def _quantize_money(v: Decimal) -> Decimal:
     return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _to_decimal(value: Any, *, field: str) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Invalid {field} in flight_snapshot")
 
 
 def _get_exchange_rate(db: Session) -> Decimal:
@@ -119,3 +126,47 @@ def apply_round_trip_pricing_logic(db: Session, bundles: List[Dict], adults: int
         })
 
     return final_results
+
+
+def calculate_booking_totals(db: Session, snapshot: Dict[str, Any], adults: int, booking_type: str) -> Dict[str, Decimal]:
+    usd_to_mmk = _get_exchange_rate(db)
+    base_price_usd = _to_decimal(snapshot.get("base_price_usd"), field="base_price_usd")
+
+    override = None
+    if booking_type == "ONE_WAY":
+        departure_time = snapshot.get("departure_time")
+        if departure_time:
+            try:
+                departure_date = datetime.fromisoformat(departure_time).date()
+                override = db.query(FlightOverride).filter(
+                    FlightOverride.airline_code == snapshot.get("airline_code"),
+                    FlightOverride.flight_number == snapshot.get("flight_number"),
+                    FlightOverride.departure_date == departure_date,
+                ).first()
+            except Exception:
+                override = None
+    else:
+        outbound = snapshot.get("outbound") or {}
+        departure_time = outbound.get("departure_time")
+        if departure_time:
+            try:
+                departure_date = datetime.fromisoformat(departure_time).date()
+                override = db.query(FlightOverride).filter(
+                    FlightOverride.airline_code == outbound.get("airline_code"),
+                    FlightOverride.flight_number == outbound.get("flight_number"),
+                    FlightOverride.departure_date == departure_date,
+                ).first()
+            except Exception:
+                override = None
+
+    final_price_per_pax_usd = _calc_final_price(
+        base_price_usd,
+        Decimal(str(override.override_price_usd)) if override else None,
+    )
+    total_price_usd = _quantize_money(final_price_per_pax_usd * Decimal(adults))
+    total_price_mmk = _quantize_money(total_price_usd * usd_to_mmk)
+    return {
+        "base_price_usd": _quantize_money(base_price_usd),
+        "final_price_usd": total_price_usd,
+        "final_price_mmk": total_price_mmk,
+    }

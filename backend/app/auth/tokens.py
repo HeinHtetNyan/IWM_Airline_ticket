@@ -19,4 +19,4 @@ def create_access_token(subject: str, role: str, expires_minutes: Optional[int] 
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

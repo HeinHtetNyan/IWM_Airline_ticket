@@ -893,6 +893,62 @@
           ]
         }
       }
+    },
+    {
+      "name": "GET /api/admin/exchange-rate",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/admin/exchange-rate",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "exchange-rate"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "PUT /api/admin/exchange-rate",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{admin_access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"usd_to_mmk\": 4200\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/admin/exchange-rate",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "admin",
+            "exchange-rate"
+          ]
+        }
+      },
+      "response": []
     }
   ],
   "variable": [

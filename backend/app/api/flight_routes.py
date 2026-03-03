@@ -1,6 +1,8 @@
-from datetime import date
+from collections import defaultdict, deque
+from datetime import date, datetime, timezone
+from threading import Lock
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
@@ -11,6 +13,34 @@ from app.services.external_flight_api import (
 from app.services.pricing_engine import apply_pricing_logic, apply_round_trip_pricing_logic
 
 router = APIRouter(prefix="/flights", tags=["flights"])
+
+_RATE_LIMIT_REQUESTS = 30
+_RATE_LIMIT_SECONDS = 60
+_rate_limit_lock = Lock()
+_request_history: dict[str, deque[datetime]] = defaultdict(deque)
+
+
+def _client_key(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    client = request.client.host if request.client else "unknown"
+    return client
+
+
+def _enforce_search_rate_limit(request: Request) -> None:
+    key = _client_key(request)
+    now = datetime.now(timezone.utc)
+
+    with _rate_limit_lock:
+        history = _request_history[key]
+        while history and (now - history[0]).total_seconds() > _RATE_LIMIT_SECONDS:
+            history.popleft()
+
+        if len(history) >= _RATE_LIMIT_REQUESTS:
+            raise HTTPException(status_code=429, detail="Too many search requests. Please try again shortly.")
+
+        history.append(now)
 
 
 def _parse_date(value: str, field_name: str) -> date:
@@ -25,6 +55,7 @@ def _parse_date(value: str, field_name: str) -> date:
 
 @router.get("/search")
 def search_flights(
+    request: Request,
     origin: str,
     destination: str,
     departure_date: str,
@@ -32,6 +63,7 @@ def search_flights(
     adults: int = Query(1, ge=1),
     db: Session = Depends(get_db),
 ):
+    _enforce_search_rate_limit(request)
     _parse_date(departure_date, "departure_date")
     api_flights = fetch_flights_from_external_api(origin=origin, destination=destination, departure_date=departure_date, page=page)
     return apply_pricing_logic(db, api_flights, adults)
@@ -39,6 +71,7 @@ def search_flights(
 
 @router.get("/search-round-trip")
 def search_round_trip(
+    request: Request,
     origin: str,
     destination: str,
     departure_date: str,
@@ -47,6 +80,7 @@ def search_round_trip(
     adults: int = Query(1, ge=1),
     db: Session = Depends(get_db),
 ):
+    _enforce_search_rate_limit(request)
     dep = _parse_date(departure_date, "departure_date")
     ret = _parse_date(return_date, "return_date")
     if ret < dep:

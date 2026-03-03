@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Air Ticket Booking API",
-    "version": "0.1.0"
+    "version": "1.0.0"
   },
   "paths": {
     "/api/health": {
@@ -1001,6 +1001,72 @@
         }
       }
     },
+    "/api/admin/exchange-rate": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Exchange Rate",
+        "operationId": "get_exchange_rate_api_admin_exchange_rate_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update Exchange Rate",
+        "operationId": "update_exchange_rate_api_admin_exchange_rate_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExchangeRateUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/contact/": {
       "post": {
         "tags": [
@@ -1114,6 +1180,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1,
               "title": "Page"
             }
@@ -1124,6 +1191,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1,
               "title": "Adults"
             }
@@ -1201,6 +1269,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1,
               "title": "Page"
             }
@@ -1211,6 +1280,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 1,
               "default": 1,
               "title": "Adults"
             }
@@ -1334,6 +1404,7 @@
           },
           "email": {
             "type": "string",
+            "format": "email",
             "title": "Email"
           },
           "password": {
@@ -1475,8 +1546,7 @@
       "BookingCreate": {
         "properties": {
           "type": {
-            "type": "string",
-            "title": "Type"
+            "$ref": "#/components/schemas/BookingType"
           },
           "adults": {
             "type": "integer",
@@ -1499,23 +1569,13 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Flight Snapshot"
-          },
-          "final_price_usd": {
-            "type": "number",
-            "title": "Final Price Usd"
-          },
-          "final_price_mmk": {
-            "type": "number",
-            "title": "Final Price Mmk"
           }
         },
         "type": "object",
         "required": [
           "type",
           "adults",
-          "flight_snapshot",
-          "final_price_usd",
-          "final_price_mmk"
+          "flight_snapshot"
         ],
         "title": "BookingCreate"
       },
@@ -1602,6 +1662,28 @@
               }
             ],
             "title": "Passengers"
+          },
+          "outbound_completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outbound Completed"
+          },
+          "inbound_completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Completed"
           }
         },
         "type": "object",
@@ -1619,11 +1701,20 @@
         ],
         "title": "BookingOut"
       },
+      "BookingStatus": {
+        "type": "string",
+        "enum": [
+          "PROCESSING",
+          "CONFIRMED",
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "title": "BookingStatus"
+      },
       "BookingStatusUpdate": {
         "properties": {
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/BookingStatus"
           }
         },
         "type": "object",
@@ -1631,6 +1722,14 @@
           "status"
         ],
         "title": "BookingStatusUpdate"
+      },
+      "BookingType": {
+        "type": "string",
+        "enum": [
+          "ONE_WAY",
+          "ROUND_TRIP"
+        ],
+        "title": "BookingType"
       },
       "ContactCreate": {
         "properties": {
@@ -1716,6 +1815,7 @@
         "properties": {
           "email": {
             "type": "string",
+            "format": "email",
             "title": "Email"
           },
           "password": {
@@ -1819,6 +1919,22 @@
         ],
         "title": "DashboardToday"
       },
+      "ExchangeRateUpdate": {
+        "properties": {
+          "usd_to_mmk": {
+            "type": "number",
+            "maximum": 100000.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Usd To Mmk",
+            "description": "USD to MMK exchange rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "usd_to_mmk"
+        ],
+        "title": "ExchangeRateUpdate"
+      },
       "FlightOverrideCreate": {
         "properties": {
           "airline_code": {
@@ -1836,6 +1952,7 @@
           },
           "override_price_usd": {
             "type": "number",
+            "exclusiveMinimum": 0.0,
             "title": "Override Price Usd"
           }
         },
@@ -1865,6 +1982,7 @@
           },
           "override_price_usd": {
             "type": "number",
+            "exclusiveMinimum": 0.0,
             "title": "Override Price Usd"
           },
           "id": {
@@ -1886,6 +2004,7 @@
         "properties": {
           "override_price_usd": {
             "type": "number",
+            "exclusiveMinimum": 0.0,
             "title": "Override Price Usd"
           }
         },
@@ -1894,6 +2013,14 @@
           "override_price_usd"
         ],
         "title": "FlightOverrideUpdate"
+      },
+      "Gender": {
+        "type": "string",
+        "enum": [
+          "MALE",
+          "FEMALE"
+        ],
+        "title": "Gender"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1912,6 +2039,7 @@
         "properties": {
           "email": {
             "type": "string",
+            "format": "email",
             "title": "Email"
           },
           "password": {
@@ -1954,11 +2082,12 @@
           },
           "passport_number": {
             "type": "string",
+            "maxLength": 20,
+            "minLength": 4,
             "title": "Passport Number"
           },
           "gender": {
-            "type": "string",
-            "title": "Gender"
+            "$ref": "#/components/schemas/Gender"
           },
           "date_of_birth": {
             "type": "string",
@@ -1967,6 +2096,8 @@
           },
           "nationality": {
             "type": "string",
+            "maxLength": 56,
+            "minLength": 2,
             "title": "Nationality"
           },
           "phone_number": {
@@ -2048,11 +2179,19 @@
         ],
         "title": "PassengerOut"
       },
+      "PaymentStatus": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "PAID",
+          "FAILED"
+        ],
+        "title": "PaymentStatus"
+      },
       "PaymentStatusUpdate": {
         "properties": {
           "payment_status": {
-            "type": "string",
-            "title": "Payment Status"
+            "$ref": "#/components/schemas/PaymentStatus"
           }
         },
         "type": "object",
