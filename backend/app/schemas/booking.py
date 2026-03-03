@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from uuid import UUID
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 from app.schemas.passenger import PassengerOut
@@ -8,16 +10,18 @@ from app.schemas.passenger import PassengerOut
 
 # CUSTOMER BOOKING
 
+class BookingTypeEnum(str, Enum):
+    ONE_WAY = "ONE_WAY"
+    ROUND_TRIP = "ROUND_TRIP"
+
+
 class BookingCreate(BaseModel):
-    type: str  # "ONE_WAY" or "ROUND_TRIP"
+    type: BookingTypeEnum
 
     adults: int = Field(..., gt=0, le=9)
 
     bundle_key: Optional[str] = None
     flight_snapshot: Dict[str, Any]
-
-    final_price_usd: float
-    final_price_mmk: float
 
 
 class BookingOut(BaseModel):

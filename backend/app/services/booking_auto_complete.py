@@ -1,9 +1,22 @@
+import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-import json
+
 from sqlalchemy.orm import Session
-from app.models.booking import Booking
+
 from app.models.airport import Airport
+from app.models.booking import Booking
+
+
+def _to_utc(departure_time_str: str, airport_tz: str):
+    parsed = datetime.fromisoformat(departure_time_str)
+
+    if parsed.tzinfo is None:
+        local_aware = parsed.replace(tzinfo=ZoneInfo(airport_tz))
+    else:
+        local_aware = parsed
+
+    return local_aware.astimezone(timezone.utc)
 
 
 def auto_complete_bookings(db: Session):
@@ -23,9 +36,7 @@ def auto_complete_bookings(db: Session):
         except Exception:
             continue
 
-        # ONE WAY
         if booking.type == "ONE_WAY":
-
             departure_time_str = snapshot.get("departure_time")
             origin = snapshot.get("origin")
 
@@ -37,11 +48,7 @@ def auto_complete_bookings(db: Session):
                 continue
 
             try:
-                local_naive = datetime.fromisoformat(departure_time_str)
-                local_aware = local_naive.replace(
-                    tzinfo=ZoneInfo(airport.timezone)
-                )
-                departure_utc = local_aware.astimezone(timezone.utc)
+                departure_utc = _to_utc(departure_time_str, airport.timezone)
             except Exception:
                 continue
 
@@ -49,10 +56,7 @@ def auto_complete_bookings(db: Session):
                 booking.status = "COMPLETED"
                 completed_count += 1
 
-        # ROUND TRIP
         elif booking.type == "ROUND_TRIP":
-
-            # OUTBOUND
             outbound = snapshot.get("outbound")
 
             if outbound and not booking.outbound_completed:
@@ -63,18 +67,12 @@ def auto_complete_bookings(db: Session):
                     airport = db.query(Airport).filter(Airport.code == origin).first()
                     if airport:
                         try:
-                            local_naive = datetime.fromisoformat(dep_str)
-                            local_aware = local_naive.replace(
-                                tzinfo=ZoneInfo(airport.timezone)
-                            )
-                            departure_utc = local_aware.astimezone(timezone.utc)
-
+                            departure_utc = _to_utc(dep_str, airport.timezone)
                             if departure_utc < now_utc:
                                 booking.outbound_completed = True
                         except Exception:
                             pass
 
-            # INBOUND
             inbound = snapshot.get("inbound")
 
             if inbound and not booking.inbound_completed:
@@ -85,18 +83,12 @@ def auto_complete_bookings(db: Session):
                     airport = db.query(Airport).filter(Airport.code == origin).first()
                     if airport:
                         try:
-                            local_naive = datetime.fromisoformat(dep_str)
-                            local_aware = local_naive.replace(
-                                tzinfo=ZoneInfo(airport.timezone)
-                            )
-                            departure_utc = local_aware.astimezone(timezone.utc)
-
+                            departure_utc = _to_utc(dep_str, airport.timezone)
                             if departure_utc < now_utc:
                                 booking.inbound_completed = True
                         except Exception:
                             pass
 
-            # If both in/outbound completed → mark whole booking completed
             if booking.outbound_completed and booking.inbound_completed:
                 booking.status = "COMPLETED"
                 completed_count += 1

@@ -18,7 +18,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
 
 
-booking_number_seq = Sequence("booking_number_seq")
+booking_number_seq = Sequence("booking_number_seq", metadata=Base.metadata)
 
 
 class Booking(Base):
