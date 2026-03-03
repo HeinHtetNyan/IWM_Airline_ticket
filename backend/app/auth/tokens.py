@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from jose import JWTError, jwt
+from jose import jwt
 
 from app.core.config import settings
 
@@ -19,8 +19,4 @@ def create_access_token(subject: str, role: str, expires_minutes: Optional[int] 
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-    """
-    Returns the decoded payload dict (sub, role, exp...).
-    Raises JWTError if invalid/expired.
-    """
-    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

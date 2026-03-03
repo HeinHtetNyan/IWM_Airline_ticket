@@ -5,6 +5,7 @@ from uuid import UUID
 import json
 from typing import Optional
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.auth.deps import (
     require_admin,
@@ -64,19 +65,20 @@ def admin_dashboard(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    today_start = datetime.utcnow().replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    mm_tz = ZoneInfo("Asia/Yangon")
+    today_start = datetime.now(mm_tz).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC"))
 
     total_paid_bookings = db.query(func.count(Booking.id)).filter(
-        Booking.payment_status == "PAID"
+        Booking.payment_status == "PAID",
+        Booking.status != "CANCELLED"
     ).scalar()
 
     revenue_totals = db.query(
         func.coalesce(func.sum(Booking.final_price_usd), 0),
         func.coalesce(func.sum(Booking.final_price_mmk), 0),
     ).filter(
-        Booking.payment_status == "PAID"
+        Booking.payment_status == "PAID",
+        Booking.status != "CANCELLED"
     ).first()
 
     processing = db.query(func.count(Booking.id)).filter(
@@ -85,7 +87,8 @@ def admin_dashboard(
 
     paid_processing = db.query(func.count(Booking.id)).filter(
         Booking.status == "PROCESSING",
-        Booking.payment_status == "PAID"
+        Booking.payment_status == "PAID",
+        Booking.status != "CANCELLED"
     ).scalar()
 
     confirmed = db.query(func.count(Booking.id)).filter(
@@ -109,6 +112,7 @@ def admin_dashboard(
         func.coalesce(func.sum(Booking.final_price_mmk), 0),
     ).filter(
         Booking.payment_status == "PAID",
+        Booking.status != "CANCELLED",
         Booking.created_at >= today_start
     ).first()
 
@@ -258,12 +262,12 @@ def update_payment_status(
         )
 
     booking.payment_status = payload.payment_status
-    booking.payment_marked_at = datetime.utcnow()
+    booking.payment_marked_at = datetime.now(ZoneInfo("UTC"))
     booking.payment_marked_by_admin_id = admin.id
 
     if payload.payment_status == "FAILED":
         booking.status = "CANCELLED"
-        booking.status_updated_at = datetime.utcnow()
+        booking.status_updated_at = datetime.now(ZoneInfo("UTC"))
         booking.status_updated_by_admin_id = admin.id
 
     db.commit()
@@ -289,14 +293,12 @@ def update_booking_status(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    if payload.status == "COMPLETED":
-        raise HTTPException(
-            status_code=400,
-            detail="COMPLETED status is system controlled only"
-        )
+    allowed_status = {"PROCESSING", "CONFIRMED", "CANCELLED"}
+    if payload.status not in allowed_status:
+        raise HTTPException(status_code=400, detail="Invalid booking status")
 
     booking.status = payload.status
-    booking.status_updated_at = datetime.utcnow()
+    booking.status_updated_at = datetime.now(ZoneInfo("UTC"))
     booking.status_updated_by_admin_id = admin.id
 
     db.commit()
@@ -322,6 +324,9 @@ def upload_ticket(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    if booking.status == "CANCELLED":
+        raise HTTPException(status_code=400, detail="Cannot upload ticket for cancelled booking")
+
     if booking.payment_status != "PAID":
         raise HTTPException(
             status_code=400,
@@ -335,11 +340,11 @@ def upload_ticket(
         )
 
     booking.ticket_file_url = payload.ticket_file_url
-    booking.ticket_uploaded_at = datetime.utcnow()
+    booking.ticket_uploaded_at = datetime.now(ZoneInfo("UTC"))
     booking.ticket_uploaded_by_admin_id = admin.id
 
     booking.status = "CONFIRMED"
-    booking.status_updated_at = datetime.utcnow()
+    booking.status_updated_at = datetime.now(ZoneInfo("UTC"))
     booking.status_updated_by_admin_id = admin.id
 
     db.commit()

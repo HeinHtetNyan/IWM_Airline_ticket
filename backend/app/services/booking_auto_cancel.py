@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.booking import Booking
 
@@ -9,7 +9,7 @@ def auto_cancel_expired_bookings(db: Session, expire_minutes: int = 30):
     ONLY if payment_status is still PENDING.
     """
 
-    threshold_time = datetime.utcnow() - timedelta(minutes=expire_minutes)
+    threshold_time = datetime.now(timezone.utc) - timedelta(minutes=expire_minutes)
 
     expired_bookings = (
         db.query(Booking)

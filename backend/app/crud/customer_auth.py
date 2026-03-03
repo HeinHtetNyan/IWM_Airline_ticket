@@ -1,14 +1,12 @@
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from app.models.customer_user import CustomerUser
-from app.utils.security import hash_password, verify_password
+from app.auth.security import get_password_hash, verify_password
 
-async def get_customer_by_email(db: AsyncSession, email: str) -> CustomerUser | None:
-    res = await db.execute(select(CustomerUser).where(CustomerUser.email == email))
-    return res.scalar_one_or_none()
+def get_customer_by_email(db: Session, email: str) -> CustomerUser | None:
+    return db.query(CustomerUser).filter(CustomerUser.email == email).first()
 
-async def create_customer(
-    db: AsyncSession,
+def create_customer(
+    db: Session,
     *,
     email: str,
     password: str,
@@ -17,17 +15,17 @@ async def create_customer(
 ) -> CustomerUser:
     user = CustomerUser(
         email=email.lower().strip(),
-        password_hash=hash_password(password),
+        password_hash=get_password_hash(password),
         full_name=full_name,
         phone=phone,
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    db.commit()
+    db.refresh(user)
     return user
 
-async def authenticate_customer(db: AsyncSession, *, email: str, password: str) -> CustomerUser | None:
-    user = await get_customer_by_email(db, email.lower().strip())
+def authenticate_customer(db: Session, *, email: str, password: str) -> CustomerUser | None:
+    user = get_customer_by_email(db, email.lower().strip())
     if not user or not user.is_active:
         return None
     if not verify_password(password, user.password_hash):

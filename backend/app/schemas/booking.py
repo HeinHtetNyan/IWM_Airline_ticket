@@ -1,47 +1,51 @@
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from enum import Enum
+from typing import Any, Dict, List, Optional
 from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 from app.schemas.passenger import PassengerOut
 
 
-# CUSTOMER BOOKING
+class BookingType(str, Enum):
+    ONE_WAY = "ONE_WAY"
+    ROUND_TRIP = "ROUND_TRIP"
+
+
+class BookingStatus(str, Enum):
+    PROCESSING = "PROCESSING"
+    CONFIRMED = "CONFIRMED"
+    COMPLETED = "COMPLETED"
+    CANCELLED = "CANCELLED"
+
+
+class PaymentStatus(str, Enum):
+    PENDING = "PENDING"
+    PAID = "PAID"
+    FAILED = "FAILED"
+
 
 class BookingCreate(BaseModel):
-    type: str  # "ONE_WAY" or "ROUND_TRIP"
-
+    type: BookingType
     adults: int = Field(..., gt=0, le=9)
-
     bundle_key: Optional[str] = None
     flight_snapshot: Dict[str, Any]
-
-    final_price_usd: float
-    final_price_mmk: float
 
 
 class BookingOut(BaseModel):
     booking_id: UUID
     booking_code: Optional[str]
-
     type: str
     adults: int
-
     bundle_key: Optional[str]
     flight_snapshot: Dict[str, Any]
-
     final_price_usd: float
     final_price_mmk: float
-
     status: str
     payment_status: str
-
     created_at: Optional[datetime] = None
-
-    # Passengers
     passengers: Optional[List[PassengerOut]] = None
-
-    # Admin lifecycle tracking
     outbound_completed: Optional[bool] = None
     inbound_completed: Optional[bool] = None
 
@@ -49,10 +53,8 @@ class BookingOut(BaseModel):
         from_attributes = True
 
 
-# ADMIN BOOKING ACTIONS
-
 class BookingStatusUpdate(BaseModel):
-    status: str
+    status: BookingStatus
 
 
 class TicketUpload(BaseModel):
@@ -60,7 +62,7 @@ class TicketUpload(BaseModel):
 
 
 class PaymentStatusUpdate(BaseModel):
-    payment_status: str
+    payment_status: PaymentStatus
 
 
 class BookingStats(BaseModel):
@@ -72,8 +74,6 @@ class BookingStats(BaseModel):
     total_revenue_usd: float
     total_revenue_mmk: float
 
-
-# ADMIN DASHBOARD
 
 class DashboardFinancial(BaseModel):
     total_paid_bookings: int
@@ -99,34 +99,3 @@ class AdminDashboard(BaseModel):
     financial: DashboardFinancial
     operational: DashboardOperational
     today: DashboardToday
-
-
-# AUDIT STRUCTURE (SUPER ADMIN ONLY)
-
-class AuditAdminInfo(BaseModel):
-    id: Optional[UUID]
-    email: Optional[str]
-    name: Optional[str]
-
-
-class AuditPayment(BaseModel):
-    status: str
-    marked_at: Optional[datetime]
-    marked_by: AuditAdminInfo
-
-
-class AuditStatus(BaseModel):
-    current_status: str
-    updated_at: Optional[datetime]
-    updated_by: AuditAdminInfo
-
-
-class AuditTicket(BaseModel):
-    uploaded_at: Optional[datetime]
-    uploaded_by: AuditAdminInfo
-
-
-class BookingAuditOut(BaseModel):
-    payment: AuditPayment
-    status: AuditStatus
-    ticket: AuditTicket

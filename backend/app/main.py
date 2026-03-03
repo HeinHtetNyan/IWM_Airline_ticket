@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import FastAPI, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -39,7 +39,7 @@ def lifecycle_job():
         complete_result = auto_complete_bookings(db)
 
         print(
-            f"[LIFECYCLE] {datetime.utcnow()} | "
+            f"[LIFECYCLE] {datetime.now(timezone.utc)} | "
             f"Cancelled: {cancel_result['cancelled_count']} | "
             f"Completed: {complete_result['completed']}"
         )
@@ -94,3 +94,9 @@ def root():
 @app.get("/db-check")
 def db_check(db: Session = Depends(get_db)):
     return {"ok": bool(db.execute(text("SELECT 1")).scalar())}
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
