@@ -18,6 +18,6 @@ def get_bookings_by_customer_id(db: Session, customer_id: UUID) -> List[Booking]
 def get_booking_by_id_for_customer(db: Session, booking_id: UUID, customer_id: UUID) -> Optional[Booking]:
     return (
         db.query(Booking)
-        .filter(Booking.booking_id == booking_id, Booking.customer_id == customer_id)
+        .filter(Booking.id == booking_id, Booking.customer_id == customer_id)
         .first()
     )
