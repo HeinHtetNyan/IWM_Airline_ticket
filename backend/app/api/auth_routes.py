@@ -44,6 +44,19 @@ def customer_signup(payload: CustomerSignupIn, db: Session = Depends(get_db)):
     )
 
 
+def _customer_token_response(user: CustomerUser) -> TokenOut:
+    token = create_access_token(subject=str(user.id), role="CUSTOMER")
+    return TokenOut(
+        access_token=token,
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": user.phone,
+        },
+    )
+
+
 @router.post("/customer/login", response_model=TokenOut)
 def customer_login(payload: LoginIn, db: Session = Depends(get_db)):
     email = payload.email.lower().strip()
@@ -54,39 +67,13 @@ def customer_login(payload: LoginIn, db: Session = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive")
 
-    token = create_access_token(subject=str(user.id), role="CUSTOMER")
-    return TokenOut(
-        access_token=token,
-        user={
-            "id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "phone": user.phone,
-        },
-    )
+    return _customer_token_response(user)
 
 
 @router.post("/customer/token", response_model=TokenOut)
 def customer_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    email = form_data.username.lower().strip()
-    password = form_data.password
-
-    user = db.query(CustomerUser).filter(CustomerUser.email == email).first()
-    if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="User is inactive")
-
-    token = create_access_token(subject=str(user.id), role="CUSTOMER")
-    return TokenOut(
-        access_token=token,
-        user={
-            "id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "phone": user.phone,
-        },
-    )
+    login_payload = LoginIn(email=form_data.username, password=form_data.password)
+    return customer_login(login_payload, db)
 
 
 # ADMIN

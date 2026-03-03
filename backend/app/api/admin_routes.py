@@ -4,7 +4,7 @@ from sqlalchemy import func
 from uuid import UUID
 import json
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from app.auth.deps import (
     require_admin,
@@ -64,19 +64,23 @@ def admin_dashboard(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    today_start = datetime.utcnow().replace(
+    mmt = timezone(timedelta(hours=6, minutes=30))
+    today_start_mmt = datetime.now(mmt).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
+    today_start_utc = today_start_mmt.astimezone(timezone.utc)
 
     total_paid_bookings = db.query(func.count(Booking.id)).filter(
-        Booking.payment_status == "PAID"
+        Booking.payment_status == "PAID",
+        Booking.status != "CANCELLED",
     ).scalar()
 
     revenue_totals = db.query(
         func.coalesce(func.sum(Booking.final_price_usd), 0),
         func.coalesce(func.sum(Booking.final_price_mmk), 0),
     ).filter(
-        Booking.payment_status == "PAID"
+        Booking.payment_status == "PAID",
+        Booking.status != "CANCELLED",
     ).first()
 
     processing = db.query(func.count(Booking.id)).filter(
@@ -101,7 +105,7 @@ def admin_dashboard(
     ).scalar()
 
     bookings_today = db.query(func.count(Booking.id)).filter(
-        Booking.created_at >= today_start
+        Booking.created_at >= today_start_utc
     ).scalar()
 
     revenue_today = db.query(
@@ -109,7 +113,8 @@ def admin_dashboard(
         func.coalesce(func.sum(Booking.final_price_mmk), 0),
     ).filter(
         Booking.payment_status == "PAID",
-        Booking.created_at >= today_start
+        Booking.status != "CANCELLED",
+        Booking.created_at >= today_start_utc
     ).first()
 
     return AdminDashboard(
@@ -258,12 +263,12 @@ def update_payment_status(
         )
 
     booking.payment_status = payload.payment_status
-    booking.payment_marked_at = datetime.utcnow()
+    booking.payment_marked_at = datetime.now(timezone.utc)
     booking.payment_marked_by_admin_id = admin.id
 
     if payload.payment_status == "FAILED":
         booking.status = "CANCELLED"
-        booking.status_updated_at = datetime.utcnow()
+        booking.status_updated_at = datetime.now(timezone.utc)
         booking.status_updated_by_admin_id = admin.id
 
     db.commit()
@@ -289,14 +294,15 @@ def update_booking_status(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    if payload.status == "COMPLETED":
+    allowed_statuses = {"PROCESSING", "CONFIRMED", "CANCELLED"}
+    if payload.status not in allowed_statuses:
         raise HTTPException(
             status_code=400,
-            detail="COMPLETED status is system controlled only"
+            detail=f"Invalid booking status. Allowed: {sorted(allowed_statuses)}"
         )
 
     booking.status = payload.status
-    booking.status_updated_at = datetime.utcnow()
+    booking.status_updated_at = datetime.now(timezone.utc)
     booking.status_updated_by_admin_id = admin.id
 
     db.commit()
@@ -322,6 +328,12 @@ def upload_ticket(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
+    if booking.status == "CANCELLED":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot upload ticket for cancelled booking"
+        )
+
     if booking.payment_status != "PAID":
         raise HTTPException(
             status_code=400,
@@ -335,11 +347,11 @@ def upload_ticket(
         )
 
     booking.ticket_file_url = payload.ticket_file_url
-    booking.ticket_uploaded_at = datetime.utcnow()
+    booking.ticket_uploaded_at = datetime.now(timezone.utc)
     booking.ticket_uploaded_by_admin_id = admin.id
 
     booking.status = "CONFIRMED"
-    booking.status_updated_at = datetime.utcnow()
+    booking.status_updated_at = datetime.now(timezone.utc)
     booking.status_updated_by_admin_id = admin.id
 
     db.commit()
@@ -357,7 +369,7 @@ def upload_ticket(
 # AUTO CANCEL
 @router.post("/bookings/auto-cancel")
 def trigger_auto_cancel(
-    expire_minutes: int = 30,
+    expire_minutes: int = Query(30, ge=10, le=1440),
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):

@@ -6,5 +6,9 @@ class Message(BaseModel):
 
 
 class ExchangeRateUpdate(BaseModel):
-    usd_to_mmk: float = Field(..., gt=0, description="USD to MMK exchange rate (must be positive)")
-    
+    usd_to_mmk: float = Field(
+        ...,
+        gt=0,
+        le=100000,
+        description="USD to MMK exchange rate (must be positive and realistic)",
+    )

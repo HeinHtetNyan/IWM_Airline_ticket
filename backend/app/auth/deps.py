@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, status
+from jose import JWTError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -16,7 +17,10 @@ def get_current_customer(
 ) -> CustomerUser:
 
     token = credentials.credentials
-    payload = decode_access_token(token)
+    try:
+        payload = decode_access_token(token)
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     user_id = payload.get("sub")
     role = payload.get("role")
@@ -37,7 +41,10 @@ def get_current_admin(
 ) -> AdminUser:
 
     token = credentials.credentials
-    payload = decode_access_token(token)
+    try:
+        payload = decode_access_token(token)
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
 
     admin_id = payload.get("sub")
     role = payload.get("role")
