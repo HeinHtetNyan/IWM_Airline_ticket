@@ -305,7 +305,7 @@ def update_booking_status(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    allowed_status = {"PROCESSING", "CONFIRMED", "CANCELLED"}
+    allowed_status = {"PROCESSING", "CONFIRMED", "COMPLETED", "CANCELLED"}
     if payload.status not in allowed_status:
         raise HTTPException(status_code=400, detail="Invalid booking status")
 
