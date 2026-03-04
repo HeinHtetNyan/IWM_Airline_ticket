@@ -34,6 +34,17 @@ def _require_numeric(data: dict, field: str, errors: list[str], *, prefix: str =
         errors.append(f"{prefix}{field} must be greater than 0")
 
 
+def _require_iso_datetime(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
+    value = data.get(field)
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{prefix}{field} must be a non-empty string")
+        return
+    try:
+        datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        errors.append(f"{prefix}{field} must be a valid ISO datetime (e.g. 2025-06-01T10:00:00)")
+
+
 def _validate_snapshot(payload: BookingCreate) -> dict:
     snapshot = payload.flight_snapshot
     if not isinstance(snapshot, dict):
@@ -43,7 +54,8 @@ def _validate_snapshot(payload: BookingCreate) -> dict:
     _require_numeric(snapshot, "base_price_usd", errors)
 
     if payload.type == "ONE_WAY":
-        for field in ("departure_time", "origin", "destination"):
+        _require_iso_datetime(snapshot, "departure_time", errors)
+        for field in ("origin", "destination"):
             _require_non_empty_str(snapshot, field, errors)
     else:
         for leg_name in ("outbound", "inbound"):
@@ -51,7 +63,8 @@ def _validate_snapshot(payload: BookingCreate) -> dict:
             if not isinstance(leg, dict):
                 errors.append(f"{leg_name} must be an object")
                 continue
-            for field in ("departure_time", "origin", "destination"):
+            _require_iso_datetime(leg, "departure_time", errors, prefix=f"{leg_name}.")
+            for field in ("origin", "destination"):
                 _require_non_empty_str(leg, field, errors, prefix=f"{leg_name}.")
 
     if errors:
