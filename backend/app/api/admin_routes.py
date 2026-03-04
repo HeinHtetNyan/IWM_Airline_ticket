@@ -305,11 +305,26 @@ def update_booking_status(
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
-    allowed_status = {"PROCESSING", "CONFIRMED", "CANCELLED"}
-    if payload.status not in allowed_status:
-        raise HTTPException(status_code=400, detail="Invalid booking status")
+    allowed_transitions = {
+        "PROCESSING": {"PROCESSING", "CONFIRMED", "CANCELLED"},
+        "CONFIRMED": {"CONFIRMED", "COMPLETED", "CANCELLED"},
+        "COMPLETED": {"COMPLETED"},
+        "CANCELLED": {"CANCELLED"},
+    }
+
+    if payload.status not in allowed_transitions.get(booking.status, set()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot change booking status from {booking.status} to {payload.status}",
+        )
+
+    if payload.status == "COMPLETED" and booking.payment_status != "PAID":
+        raise HTTPException(status_code=400, detail="Cannot complete booking before payment is PAID")
 
     booking.status = payload.status
+    if booking.type == "ROUND_TRIP" and payload.status == "COMPLETED":
+        booking.outbound_completed = True
+        booking.inbound_completed = True
     booking.status_updated_at = datetime.now(ZoneInfo("UTC"))
     booking.status_updated_by_admin_id = admin.id
 
