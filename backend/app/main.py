@@ -2,7 +2,7 @@ import time
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-
+from backend.app.health.routes import router as health_router
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -111,6 +111,7 @@ app.add_middleware(
 
 
 # Routers
+app.include_router(health_router)
 app.include_router(api_router)
 app.include_router(flight_router, prefix="/api")
 
@@ -122,6 +123,6 @@ def root():
 
 
 # Database health check
-@app.get("/db-check")
-def db_check(db: Session = Depends(get_db)):
-    return {"ok": bool(db.execute(text("SELECT 1")).scalar())}
+# @app.get("/db-check")
+# def db_check(db: Session = Depends(get_db)):
+#     return {"ok": bool(db.execute(text("SELECT 1")).scalar())}
