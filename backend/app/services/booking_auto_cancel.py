@@ -10,6 +10,7 @@ def auto_cancel_expired_bookings(db: Session, expire_minutes: int = 30):
     """
 
     threshold_time = datetime.now(timezone.utc) - timedelta(minutes=expire_minutes)
+    now = datetime.now(timezone.utc)
 
     expired_bookings = (
         db.query(Booking)
@@ -25,6 +26,7 @@ def auto_cancel_expired_bookings(db: Session, expire_minutes: int = 30):
 
     for booking in expired_bookings:
         booking.status = "CANCELLED"
+        booking.status_updated_at = now
         cancelled_count += 1
 
     db.commit()

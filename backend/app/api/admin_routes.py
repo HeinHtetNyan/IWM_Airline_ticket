@@ -208,6 +208,16 @@ def list_all_bookings(
     ]
 
 
+# AUTO CANCEL
+@router.post("/bookings/auto-cancel")
+def trigger_auto_cancel(
+    expire_minutes: int = 30,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_admin),
+):
+    return auto_cancel_expired_bookings(db, expire_minutes)
+
+
 # ADMIN BOOKING DETAIL
 @router.get("/bookings/{booking_id}", response_model=BookingOut)
 def get_booking_detail(
@@ -357,16 +367,6 @@ def upload_ticket(
         "status": booking.status,
         "uploaded_by": admin.email,
     }
-
-
-# AUTO CANCEL
-@router.post("/bookings/auto-cancel")
-def trigger_auto_cancel(
-    expire_minutes: int = 30,
-    db: Session = Depends(get_db),
-    admin: AdminUser = Depends(require_admin),
-):
-    return auto_cancel_expired_bookings(db, expire_minutes)
 
 
 # BOOKING AUDIT (SUPER ADMIN ONLY)

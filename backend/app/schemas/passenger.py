@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from enum import Enum
-from typing import List
+from typing import Annotated, List
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -29,7 +29,7 @@ class PassengerCreate(BaseModel):
 
 
 class PassengerBulkCreate(BaseModel):
-    passengers: List[PassengerCreate]
+    passengers: Annotated[List[PassengerCreate], Field(min_length=1, max_length=9)]
 
 
 class PassengerOut(BaseModel):

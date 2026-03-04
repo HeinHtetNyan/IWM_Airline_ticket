@@ -16,6 +16,7 @@ router = APIRouter(prefix="/flights", tags=["flights"])
 
 _RATE_LIMIT_REQUESTS = 30
 _RATE_LIMIT_SECONDS = 60
+_MAX_TRACKED_IPS = 10_000
 _rate_limit_lock = Lock()
 _request_history: dict[str, deque[datetime]] = defaultdict(deque)
 
@@ -33,6 +34,10 @@ def _enforce_search_rate_limit(request: Request) -> None:
     now = datetime.now(timezone.utc)
 
     with _rate_limit_lock:
+        if len(_request_history) >= _MAX_TRACKED_IPS and key not in _request_history:
+            oldest_key = next(iter(_request_history))
+            del _request_history[oldest_key]
+
         history = _request_history[key]
         while history and (now - history[0]).total_seconds() > _RATE_LIMIT_SECONDS:
             history.popleft()

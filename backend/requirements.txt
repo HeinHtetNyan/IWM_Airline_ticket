@@ -4,7 +4,7 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 pydantic-settings
-passlib[bcrypt]==1.7.4
+passlib==1.7.4
 python-jose[cryptography]
 python-multipart
 httpx
