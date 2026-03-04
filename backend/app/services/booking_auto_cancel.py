@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
-from app.models.booking import Booking
+from backend.app.models.booking import Booking
 
 
 def auto_cancel_expired_bookings(db: Session, expire_minutes: int = 30):

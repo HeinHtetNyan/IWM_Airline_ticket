@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db
-from app.auth.deps import get_current_customer
-from app.models.customer_user import CustomerUser
-from app.models.customer_contact import CustomerContact
-from app.schemas.contact import ContactCreate, ContactOut
+from backend.app.db.deps import get_db
+from backend.app.auth.deps import get_current_customer
+from backend.app.models.customer_user import CustomerUser
+from backend.app.models.customer_contact import CustomerContact
+from backend.app.schemas.contact import ContactCreate, ContactOut
 
 router = APIRouter(prefix="/contact", tags=["contact"])
 

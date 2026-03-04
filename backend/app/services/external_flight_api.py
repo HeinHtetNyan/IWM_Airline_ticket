@@ -3,7 +3,7 @@ from typing import Dict, List
 
 import httpx
 
-from app.core.config import settings
+from backend.app.core.config import settings
 
 RAPIDAPI_URL = "https://ago-travel.p.rapidapi.com/flights/search-one-way"
 ROUND_TRIP_URL = "https://ago-travel.p.rapidapi.com/flights/search-roundtrip"

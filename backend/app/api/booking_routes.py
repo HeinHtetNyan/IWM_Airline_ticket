@@ -7,14 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_customer
-from app.db.deps import get_db
-from app.models.booking import Booking
-from app.models.booking_passenger import BookingPassenger as Passenger
-from app.models.customer_user import CustomerUser
-from app.schemas.booking import BookingCreate, BookingOut
-from app.schemas.passenger import PassengerBulkCreate, PassengerOut
-from app.services.pricing_engine import calculate_booking_totals
+from backend.app.auth.deps import get_current_customer
+from backend.app.db.deps import get_db
+from backend.app.models.booking import Booking
+from backend.app.models.booking_passenger import BookingPassenger as Passenger
+from backend.app.models.customer_user import CustomerUser
+from backend.app.schemas.booking import BookingCreate, BookingOut
+from backend.app.schemas.passenger import PassengerBulkCreate, PassengerOut
+from backend.app.services.pricing_engine import calculate_booking_totals
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 

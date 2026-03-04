@@ -5,8 +5,8 @@ from typing import Any, Dict, List
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.models.exchange_rate import ExchangeRate
-from app.models.flight_override import FlightOverride
+from backend.app.models.exchange_rate import ExchangeRate
+from backend.app.models.flight_override import FlightOverride
 
 GLOBAL_MARKUP_PERCENT = Decimal("15")
 

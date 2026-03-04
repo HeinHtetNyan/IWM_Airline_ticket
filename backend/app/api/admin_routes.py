@@ -7,16 +7,16 @@ from typing import Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.auth.deps import (
+from backend.app.auth.deps import (
     require_admin,
     require_super_admin,
 )
-from app.db.deps import get_db
-from app.models.booking import Booking
-from app.models.admin_user import AdminUser
-from app.schemas.common import ExchangeRateUpdate
+from backend.app.db.deps import get_db
+from backend.app.models.booking import Booking
+from backend.app.models.admin_user import AdminUser
+from backend.app.schemas.common import ExchangeRateUpdate
 
-from app.schemas.booking import (
+from backend.app.schemas.booking import (
     BookingStatusUpdate,
     BookingOut,
     TicketUpload,
@@ -27,22 +27,22 @@ from app.schemas.booking import (
     DashboardToday,
 )
 
-from app.schemas.flight_override import (
+from backend.app.schemas.flight_override import (
     FlightOverrideCreate,
     FlightOverrideResponse,
     FlightOverrideUpdate
 )
 
-from app.crud.flight_override import (
+from backend.app.crud.flight_override import (
     create_override,
     get_all_overrides,
     update_override_price,
     delete_override
 )
 
-from app.models.exchange_rate import ExchangeRate
+from backend.app.models.exchange_rate import ExchangeRate
 
-from app.services.booking_auto_cancel import auto_cancel_expired_bookings
+from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 

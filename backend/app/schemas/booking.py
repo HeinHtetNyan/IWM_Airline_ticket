@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
-from app.schemas.passenger import PassengerOut
+from backend.app.schemas.passenger import PassengerOut
 
 
 class BookingType(str, Enum):

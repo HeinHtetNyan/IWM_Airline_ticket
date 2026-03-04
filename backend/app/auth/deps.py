@@ -3,10 +3,10 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
-from app.auth.tokens import TokenExpiredError, decode_access_token
-from app.db.deps import get_db
-from app.models.admin_user import AdminUser
-from app.models.customer_user import CustomerUser
+from backend.app.auth.tokens import TokenExpiredError, decode_access_token
+from backend.app.db.deps import get_db
+from backend.app.models.admin_user import AdminUser
+from backend.app.models.customer_user import CustomerUser
 
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)

@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from app.models.flight_override import FlightOverride
-from app.schemas.flight_override import FlightOverrideCreate
+from backend.app.models.flight_override import FlightOverride
+from backend.app.schemas.flight_override import FlightOverrideCreate
 
 
 def create_override(db: Session, override: FlightOverrideCreate):

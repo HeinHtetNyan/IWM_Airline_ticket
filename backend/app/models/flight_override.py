@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import CheckConstraint, Column, Date, DateTime, Float, String, UniqueConstraint
 from sqlalchemy.sql import func
 
-from app.db.base import Base
+from backend.app.db.base import Base
 
 
 class FlightOverride(Base):

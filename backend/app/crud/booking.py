@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.booking import Booking
+from backend.app.models.booking import Booking
 
 
 def get_bookings_by_customer_id(db: Session, customer_id: UUID) -> List[Booking]:

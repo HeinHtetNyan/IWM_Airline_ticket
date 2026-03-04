@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-from app.models.admin_user import AdminUser
-from app.auth.security import get_password_hash, verify_password
+from backend.app.models.admin_user import AdminUser
+from backend.app.auth.security import get_password_hash, verify_password
 
 
 def get_admin_by_email(db: Session, email: str) -> AdminUser | None:

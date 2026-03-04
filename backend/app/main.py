@@ -16,22 +16,22 @@ from backend.app.db.base import Base
 from backend.app.db.deps import get_db
 from backend.app.db.session import SessionLocal, engine
 from backend.app.core.config import settings
+
 from backend.app.models.admin_user import AdminUser
 from backend.app.models.booking import Booking
 from backend.app.models.customer_user import CustomerUser
 from backend.app.models.flight_override import FlightOverride
+
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from backend.app.services.booking_auto_complete import auto_complete_bookings
 
-app = FastAPI(
-    title="Air Ticket Booking API",
-    description="Backend API for flight search and booking system",
-    version="1.0.0",
-    openapi_url="/api/openapi.json",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-)
+
+# Logger
+logger = logging.getLogger(__name__)
+
+# Scheduler
 scheduler = BackgroundScheduler()
+
 
 def lifecycle_job():
     db = SessionLocal()

@@ -4,8 +4,8 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
-from app.models.airport import Airport
-from app.models.booking import Booking
+from backend.app.models.airport import Airport
+from backend.app.models.booking import Booking
 
 
 def _to_utc(dt_str: str, tz_name: str) -> datetime:

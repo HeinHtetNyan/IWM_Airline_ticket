@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from jose import jwt
 from jose.exceptions import ExpiredSignatureError, JWTError
 
-from app.core.config import settings
+from backend.app.core.config import settings
 
 
 class TokenExpiredError(JWTError):

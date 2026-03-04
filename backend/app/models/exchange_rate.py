@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, Float, DateTime
 from sqlalchemy.sql import func
-from app.db.base import Base
+from backend.app.db.base import Base
 
 
 class ExchangeRate(Base):

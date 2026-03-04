@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db
+from backend.app.db.deps import get_db
 
 router = APIRouter()
 

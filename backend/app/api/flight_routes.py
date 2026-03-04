@@ -5,12 +5,12 @@ from threading import Lock
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db
-from app.services.external_flight_api import (
+from backend.app.db.deps import get_db
+from backend.app.services.external_flight_api import (
     fetch_flights_from_external_api,
     fetch_round_trip_from_external_api,
 )
-from app.services.pricing_engine import apply_pricing_logic, apply_round_trip_pricing_logic
+from backend.app.services.pricing_engine import apply_pricing_logic, apply_round_trip_pricing_logic
 
 router = APIRouter(prefix="/flights", tags=["flights"])
 
