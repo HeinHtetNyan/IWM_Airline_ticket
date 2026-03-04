@@ -273,6 +273,12 @@ def update_payment_status(
             detail="Cannot change payment for cancelled booking"
         )
 
+    if booking.status == "COMPLETED":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change payment for completed booking"
+        )
+
     booking.payment_status = payload.payment_status
     booking.payment_marked_at = datetime.now(ZoneInfo("UTC"))
     booking.payment_marked_by_admin_id = admin.id
@@ -304,6 +310,16 @@ def update_booking_status(
 
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
+
+    if booking.status == "COMPLETED":
+        raise HTTPException(status_code=400, detail="Cannot change status for completed booking")
+
+    if payload.status == booking.status:
+        return {
+            "booking_id": booking.id,
+            "new_status": booking.status,
+            "updated_by": admin.email,
+        }
 
     allowed_transitions = {
         "PROCESSING": {"PROCESSING", "CONFIRMED", "CANCELLED"},
@@ -354,6 +370,9 @@ def upload_ticket(
     if booking.status == "CANCELLED":
         raise HTTPException(status_code=400, detail="Cannot upload ticket for cancelled booking")
 
+    if booking.status == "COMPLETED":
+        raise HTTPException(status_code=400, detail="Cannot upload ticket for completed booking")
+
     if booking.payment_status != "PAID":
         raise HTTPException(
             status_code=400,
@@ -370,9 +389,10 @@ def upload_ticket(
     booking.ticket_uploaded_at = datetime.now(ZoneInfo("UTC"))
     booking.ticket_uploaded_by_admin_id = admin.id
 
-    booking.status = "CONFIRMED"
-    booking.status_updated_at = datetime.now(ZoneInfo("UTC"))
-    booking.status_updated_by_admin_id = admin.id
+    if booking.status != "CONFIRMED":
+        booking.status = "CONFIRMED"
+        booking.status_updated_at = datetime.now(ZoneInfo("UTC"))
+        booking.status_updated_by_admin_id = admin.id
 
     db.commit()
     db.refresh(booking)
