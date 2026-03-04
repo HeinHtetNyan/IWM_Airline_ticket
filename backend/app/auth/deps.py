@@ -3,7 +3,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
-from app.auth.tokens import decode_access_token
+from app.auth.tokens import TokenExpiredError, decode_access_token
 from app.db.deps import get_db
 from app.models.admin_user import AdminUser
 from app.models.customer_user import CustomerUser
@@ -14,8 +14,10 @@ security = HTTPBearer()
 def _decode_or_401(token: str):
     try:
         return decode_access_token(token)
+    except TokenExpiredError:
+        raise HTTPException(status_code=401, detail="Token has expired")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 def get_current_customer(

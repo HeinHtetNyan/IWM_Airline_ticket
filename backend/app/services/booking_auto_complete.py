@@ -63,5 +63,10 @@ def auto_complete_bookings(db: Session):
                 booking.status = "COMPLETED"
                 completed_count += 1
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
     return {"checked": len(confirmed_bookings), "completed": completed_count}

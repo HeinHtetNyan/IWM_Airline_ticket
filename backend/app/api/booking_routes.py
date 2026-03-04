@@ -19,25 +19,44 @@ from app.services.pricing_engine import calculate_booking_totals
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
+def _require_non_empty_str(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
+    value = data.get(field)
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{prefix}{field} must be a non-empty string")
+
+
+def _require_numeric(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
+    value = data.get(field)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        errors.append(f"{prefix}{field} must be a valid number")
+        return
+    if value <= 0:
+        errors.append(f"{prefix}{field} must be greater than 0")
+
+
 def _validate_snapshot(payload: BookingCreate) -> dict:
     snapshot = payload.flight_snapshot
-    required_common = {"base_price_usd"}
-    missing = [k for k in required_common if snapshot.get(k) is None]
+    if not isinstance(snapshot, dict):
+        raise HTTPException(status_code=400, detail="flight_snapshot must be a JSON object")
+
+    errors: list[str] = []
+    _require_numeric(snapshot, "base_price_usd", errors)
 
     if payload.type == "ONE_WAY":
-        for k in ("departure_time", "origin", "destination"):
-            if not snapshot.get(k):
-                missing.append(k)
+        for field in ("departure_time", "origin", "destination"):
+            _require_non_empty_str(snapshot, field, errors)
     else:
-        outbound = snapshot.get("outbound") or {}
-        inbound = snapshot.get("inbound") or {}
-        for key, section in (("outbound", outbound), ("inbound", inbound)):
-            for f in ("departure_time", "origin", "destination"):
-                if not section.get(f):
-                    missing.append(f"{key}.{f}")
+        for leg_name in ("outbound", "inbound"):
+            leg = snapshot.get(leg_name)
+            if not isinstance(leg, dict):
+                errors.append(f"{leg_name} must be an object")
+                continue
+            for field in ("departure_time", "origin", "destination"):
+                _require_non_empty_str(leg, field, errors, prefix=f"{leg_name}.")
 
-    if missing:
-        raise HTTPException(status_code=400, detail=f"flight_snapshot missing fields: {', '.join(sorted(set(missing)))}")
+    if errors:
+        raise HTTPException(status_code=400, detail=f"Invalid flight_snapshot: {', '.join(errors)}")
+
     return snapshot
 
 

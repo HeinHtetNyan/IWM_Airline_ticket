@@ -1,4 +1,5 @@
 import time
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -14,6 +15,7 @@ from app.api.router import api_router
 from app.db.base import Base
 from app.db.deps import get_db
 from app.db.session import SessionLocal, engine
+from app.core.config import settings
 from app.models.admin_user import AdminUser
 from app.models.booking import Booking
 from app.models.customer_user import CustomerUser
@@ -22,6 +24,7 @@ from app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from app.services.booking_auto_complete import auto_complete_bookings
 
 scheduler = BackgroundScheduler()
+logger = logging.getLogger(__name__)
 
 
 def lifecycle_job():
@@ -35,8 +38,8 @@ def lifecycle_job():
             f"Cancelled: {cancel_result['cancelled_count']} | "
             f"Completed: {complete_result['completed']}"
         )
-    except Exception as e:
-        print(f"[LIFECYCLE ERROR] {e}")
+    except Exception:
+        logger.exception("[LIFECYCLE ERROR] Failed running lifecycle job")
     finally:
         db.close()
 
@@ -76,7 +79,7 @@ app = FastAPI(title="Air Ticket Booking API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

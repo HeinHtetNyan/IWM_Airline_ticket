@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:3000", "https://yourdomain.com"]
 
     TICKET_API_KEY: str
 

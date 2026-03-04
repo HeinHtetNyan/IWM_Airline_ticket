@@ -179,6 +179,8 @@ def delete_flight_override(
 @router.get("/bookings", response_model=list[BookingOut])
 def list_all_bookings(
     status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
@@ -187,7 +189,7 @@ def list_all_bookings(
     if status:
         query = query.filter(Booking.status == status)
 
-    bookings = query.order_by(Booking.created_at.desc()).all()
+    bookings = query.order_by(Booking.created_at.desc()).offset(offset).limit(limit).all()
 
     return [
         BookingOut(
@@ -349,7 +351,7 @@ def upload_ticket(
             detail="Ticket already uploaded"
         )
 
-    booking.ticket_file_url = payload.ticket_file_url
+    booking.ticket_file_url = str(payload.ticket_file_url)
     booking.ticket_uploaded_at = datetime.now(ZoneInfo("UTC"))
     booking.ticket_uploaded_by_admin_id = admin.id
 
