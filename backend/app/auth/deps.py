@@ -9,6 +9,7 @@ from app.models.admin_user import AdminUser
 from app.models.customer_user import CustomerUser
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 def _decode_or_401(token: str):
@@ -37,9 +38,9 @@ def get_current_customer(
     return user
 
 
-def get_current_admin(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
+def _load_admin_from_credentials(
+    credentials: HTTPAuthorizationCredentials,
+    db: Session,
 ) -> AdminUser:
     payload = _decode_or_401(credentials.credentials)
     admin_id = payload.get("sub")
@@ -52,6 +53,22 @@ def get_current_admin(
     if not admin or not admin.is_active:
         raise HTTPException(status_code=401, detail="Admin not found or inactive")
     return admin
+
+
+def get_current_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> AdminUser:
+    return _load_admin_from_credentials(credentials, db)
+
+
+def get_current_admin_optional(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    db: Session = Depends(get_db),
+) -> AdminUser | None:
+    if credentials is None:
+        return None
+    return _load_admin_from_credentials(credentials, db)
 
 
 def require_admin(admin: AdminUser = Depends(get_current_admin)) -> AdminUser:

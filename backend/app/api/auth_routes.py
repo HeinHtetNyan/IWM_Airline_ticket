@@ -2,14 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db
-from app.schemas.auth import CustomerSignupIn, LoginIn, TokenOut, AdminSignupRequest, AdminOut
+from app.auth.deps import get_current_admin_optional
 from app.auth.security import get_password_hash, verify_password
 from app.auth.tokens import create_access_token
+from app.crud.admin_auth import authenticate_admin, create_admin, get_admin_by_email
+from app.db.deps import get_db
+from app.models.admin_user import AdminUser
 from app.models.customer_user import CustomerUser
-from app.crud.admin_auth import get_admin_by_email, create_admin, authenticate_admin
+from app.schemas.auth import AdminOut, AdminSignupRequest, CustomerSignupIn, LoginIn, TokenOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
 
 # CUSTOMER
 @router.post("/customer/signup", response_model=TokenOut, status_code=201)
@@ -91,12 +94,23 @@ def customer_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session
 
 # ADMIN
 @router.post("/admin/signup", response_model=AdminOut, status_code=201)
-def admin_signup(payload: AdminSignupRequest, db: Session = Depends(get_db)):
+def admin_signup(
+    payload: AdminSignupRequest,
+    db: Session = Depends(get_db),
+    acting_admin: AdminUser | None = Depends(get_current_admin_optional),
+):
     existing = get_admin_by_email(db, payload.email)
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    role = payload.role if payload.role in ("STAFF", "SUPER_ADMIN") else "STAFF"
+    has_existing_admin = db.query(AdminUser.id).first() is not None
+    if has_existing_admin and (not acting_admin or acting_admin.role != "SUPER_ADMIN"):
+        raise HTTPException(status_code=403, detail="Only super admins can create admin accounts")
+
+    if has_existing_admin:
+        role = payload.role if payload.role in ("STAFF", "SUPER_ADMIN") else "STAFF"
+    else:
+        role = "SUPER_ADMIN"
 
     admin = create_admin(
         db=db,
@@ -117,14 +131,11 @@ def admin_signup(payload: AdminSignupRequest, db: Session = Depends(get_db)):
 
 @router.post("/admin/token")
 def admin_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    admin = authenticate_admin(db, form_data.username, form_data.password)
+    admin = authenticate_admin(db, form_data.username.lower().strip(), form_data.password)
     if not admin:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
-    access_token = create_access_token(
-    subject=str(admin.id),
-    role=admin.role
-    )
+    access_token = create_access_token(subject=str(admin.id), role=admin.role)
 
     return {
         "access_token": access_token,

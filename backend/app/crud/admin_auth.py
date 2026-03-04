@@ -5,7 +5,8 @@ from app.auth.security import get_password_hash, verify_password
 
 
 def get_admin_by_email(db: Session, email: str) -> AdminUser | None:
-    return db.query(AdminUser).filter(AdminUser.email == email).first()
+    normalized_email = email.strip().lower()
+    return db.query(AdminUser).filter(AdminUser.email == normalized_email).first()
 
 
 def create_admin(
@@ -15,9 +16,10 @@ def create_admin(
     password: str,
     role: str = "STAFF",
 ) -> AdminUser:
+    normalized_email = email.strip().lower()
     admin = AdminUser(
         name=name,
-        email=email,
+        email=normalized_email,
         password_hash=get_password_hash(password),
         role=role,
         is_active=True,
