@@ -1,16 +1,36 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
+    # App
     APP_NAME: str = "Air Ticket Booking API"
+
+    # Database
     DATABASE_URL: str
 
+    # Auth / JWT
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:3000", "https://yourdomain.com"]
 
+    # CORS
+    CORS_ALLOW_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "https://yourdomain.com",
+    ]
+
+    # External Flight API
     TICKET_API_KEY: str
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Redis
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: str | None = None
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+    )
+
 
 settings = Settings()
