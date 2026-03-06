@@ -84,7 +84,7 @@ def search_flights(
     _enforce_search_rate_limit(request)
     _parse_date(departure_date, "departure_date")
 
-    cache_key = f"flight:{origin}:{destination}:{departure_date}:{page}"
+    cache_key = f"flight:{origin}:{destination}:{departure_date}:{page}:{adults}"
 
     try:
         cached = redis_client.get(cache_key)
@@ -92,6 +92,8 @@ def search_flights(
         cached = None
 
     if cached:
+        if isinstance(cached, bytes):
+            cached = cached.decode()
         api_flights = json.loads(cached)
     else:
         api_flights = fetch_flights_from_external_api(
@@ -131,7 +133,7 @@ def search_round_trip(
             detail="return_date must be on/after departure_date",
         )
 
-    cache_key = f"roundtrip:{origin}:{destination}:{departure_date}:{return_date}:{page}"
+    cache_key = f"roundtrip:{origin}:{destination}:{departure_date}:{return_date}:{page}:{adults}"
 
     try:
         cached = redis_client.get(cache_key)
@@ -139,6 +141,8 @@ def search_round_trip(
         cached = None
 
     if cached:
+        if isinstance(cached, bytes):
+            cached = cached.decode()
         bundles = json.loads(cached)
     else:
         bundles = fetch_round_trip_from_external_api(
