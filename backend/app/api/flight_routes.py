@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.db.deps import get_db
 from backend.app.core.redis import redis_client
+from backend.app.core.config import settings
 from backend.app.services.external_flight_api import (
     fetch_flights_from_external_api,
     fetch_round_trip_from_external_api,
@@ -101,7 +102,7 @@ def search_flights(
         )
 
         try:
-            redis_client.set(cache_key, json.dumps(api_flights), ex=900)
+            redis_client.set(cache_key, json.dumps(api_flights), ex=settings.FLIGHT_CACHE_TTL)
         except Exception:
             pass
 
@@ -149,7 +150,7 @@ def search_round_trip(
         )
 
         try:
-            redis_client.set(cache_key, json.dumps(bundles), ex=900) # redis 15 minutes cache 
+            redis_client.set(cache_key, json.dumps(bundles), ex=settings.FLIGHT_CACHE_TTL) # redis 15 minutes cache 
         except Exception:
             pass
 

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str | None = None
+    FLIGHT_CACHE_TTL: int = 900 
 
     model_config = SettingsConfigDict(
         env_file=".env",
