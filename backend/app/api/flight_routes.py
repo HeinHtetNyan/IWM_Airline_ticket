@@ -133,7 +133,7 @@ def search_round_trip(
             detail="return_date must be on/after departure_date",
         )
 
-    cache_key = f"roundtrip:{origin}:{destination}:{departure_date}:{return_date}:{page}:{adults}"
+    cache_key = f"roundtrip:{origin}:{destination}:{departure_date}:{return_date}:{page}"
 
     try:
         cached = redis_client.get(cache_key)
