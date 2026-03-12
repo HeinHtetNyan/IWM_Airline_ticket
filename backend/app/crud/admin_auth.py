@@ -1,3 +1,4 @@
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.models.admin_user import AdminUser
@@ -30,10 +31,23 @@ def create_admin(
     return admin
 
 
+
 def authenticate_admin(db: Session, email: str, password: str) -> AdminUser | None:
     admin = get_admin_by_email(db, email)
-    if not admin or not admin.is_active:
+
+    # Email not found
+    if not admin:
         return None
+
+    # Account is deactivated
+    if not admin.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been deactivated. Please contact the administrator."
+        )
+
+    # Password incorrect
     if not verify_password(password, admin.password_hash):
         return None
+
     return admin
