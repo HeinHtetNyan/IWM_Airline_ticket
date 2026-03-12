@@ -25,7 +25,14 @@ def get_all_staff(db: Session):
 
 
 def get_staff(db: Session, staff_id: UUID):
-    return db.query(AdminUser).filter(AdminUser.id == staff_id).first()
+    return (
+        db.query(AdminUser)
+        .filter(
+            AdminUser.id == staff_id,
+            AdminUser.role == "STAFF",
+        )
+        .first()
+    )
 
 
 
