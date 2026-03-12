@@ -2,25 +2,16 @@ import time
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from backend.app.health.routes import router as health_router
-from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
 
-from backend.app.api.flight_routes import router as flight_router
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.exc import OperationalError
+
 from backend.app.api.router import api_router
 from backend.app.db.base import Base
-from backend.app.db.deps import get_db
 from backend.app.db.session import SessionLocal, engine
 from backend.app.core.config import settings
-
-from backend.app.models.admin_user import AdminUser
-from backend.app.models.booking import Booking
-from backend.app.models.customer_user import CustomerUser
-from backend.app.models.flight_override import FlightOverride
 
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from backend.app.services.booking_auto_complete import auto_complete_bookings
@@ -111,18 +102,10 @@ app.add_middleware(
 
 
 # Routers
-app.include_router(health_router)
 app.include_router(api_router)
-app.include_router(flight_router, prefix="/api")
 
 
 # Root endpoint
 @app.get("/")
 def root():
     return {"message": "FastAPI running in Docker"}
-
-
-# Database health check
-# @app.get("/db-check")
-# def db_check(db: Session = Depends(get_db)):
-#     return {"ok": bool(db.execute(text("SELECT 1")).scalar())}
