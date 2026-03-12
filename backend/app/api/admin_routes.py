@@ -43,9 +43,10 @@ from backend.app.crud.flight_override import (
 from backend.app.models.exchange_rate import ExchangeRate
 
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
+from backend.app.schemas.staff import StaffResponse, StaffUpdate
+from backend.app.crud import staff as staff_crud
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
 
 # ADMIN IDENTITY
 @router.get("/me")
@@ -489,3 +490,121 @@ def update_exchange_rate(
         "message": "Exchange rate updated successfully",
         "usd_to_mmk": rate.usd_to_mmk,
     }
+
+
+#staff management
+#list staff
+@router.get("/staff", response_model=list[StaffResponse])
+def list_staff(
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin)
+):
+    return staff_crud.get_staff_list(db)
+
+#get staff detail
+@router.get("/staff/{staff_id}", response_model=StaffResponse)
+def get_staff(
+    staff_id: UUID,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin)
+):
+    staff = staff_crud.get_staff(db, staff_id)
+
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    return staff
+
+#update staff
+@router.patch("/staff/{staff_id}", response_model=StaffResponse)
+def update_staff(
+    staff_id: UUID,
+    payload: StaffUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin)
+):
+    staff = staff_crud.get_staff(db, staff_id)
+
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    return staff_crud.update_staff(db, staff, payload.model_dump(exclude_unset=True))
+
+
+#deactivate staff
+@router.patch("/staff/{staff_id}/deactivate")
+def deactivate_staff(
+    staff_id: UUID,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_super_admin),
+):
+    staff = staff_crud.get_staff(db, staff_id)
+
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    # Prevent disabling yourself
+    if staff.id == current_admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot deactivate your own account"
+        )
+
+    # Prevent removing last SUPER_ADMIN
+    if staff.role == "SUPER_ADMIN":
+        total_super_admins = staff_crud.count_super_admins(db)
+
+        if total_super_admins <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot deactivate the last SUPER_ADMIN"
+            )
+
+    return staff_crud.deactivate_staff(db, staff)
+
+
+#activate staff
+@router.patch("/staff/{staff_id}/activate")
+def activate_staff(
+    staff_id: UUID,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin),
+):
+    staff = staff_crud.get_staff(db, staff_id)
+
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    return staff_crud.activate_staff(db, staff)
+
+
+#delete staff
+@router.delete("/staff/{staff_id}")
+def delete_staff(
+    staff_id: UUID,
+    db: Session = Depends(get_db),
+    current_admin: AdminUser = Depends(require_super_admin),
+):
+    staff = staff_crud.get_staff(db, staff_id)
+
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    if staff.id == current_admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot delete your own account"
+        )
+
+    if staff.role == "SUPER_ADMIN":
+        total_super_admins = staff_crud.count_super_admins(db)
+
+        if total_super_admins <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete the last SUPER_ADMIN"
+            )
+
+    staff_crud.delete_staff(db, staff)
+
+    return {"message": "Staff deleted"}
