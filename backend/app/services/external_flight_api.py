@@ -126,6 +126,7 @@ def fetch_flights_from_external_api(
     return all_flights
 
 
+
 def fetch_round_trip_from_external_api(
     *,
     origin: str,
@@ -156,24 +157,45 @@ def fetch_round_trip_from_external_api(
     bundles = data.get("data", {}).get("bundles", [])
     results: List[Dict] = []
 
+    # 🔹 Log API request info
+    logger.info(
+        "Round-trip search: %s -> %s | depart=%s return=%s",
+        user_origin,
+        user_destination,
+        departure_date,
+        return_date,
+    )
+
+    # 🔹 Log how many bundles external API returned
+    logger.info("External API bundles: %s", len(bundles))
+
     for bundle in bundles:
 
-        outbound_segments = bundle.get("outboundSlice", {}).get("segments", [])
+        outbound_slice = bundle.get("outboundSlice", {})
+        outbound_segments = outbound_slice.get("segments", [])
 
         itineraries = bundle.get("itineraries", [])
         if not itineraries:
             continue
 
-        inbound_segments = itineraries[0].get("inboundSlice", {}).get("segments", [])
+        inbound_slice = itineraries[0].get("inboundSlice", {})
+        inbound_segments = inbound_slice.get("segments", [])
 
-        bundle_price = bundle.get("bundlePrice", [])
+        if not outbound_segments or not inbound_segments:
+            continue
 
-        if not outbound_segments or not inbound_segments or not bundle_price:
+        bundle_price = bundle.get("bundlePrice")
+
+        if isinstance(bundle_price, list):
+            price_obj = bundle_price[0] if bundle_price else None
+        else:
+            price_obj = bundle_price
+
+        if not price_obj:
             continue
 
         price = (
-            bundle_price[0]
-            .get("price", {})
+            price_obj.get("price", {})
             .get("usd", {})
             .get("display", {})
             .get("averagePerPax", {})
@@ -183,19 +205,22 @@ def fetch_round_trip_from_external_api(
         if price is None:
             continue
 
-        out_first, out_last = outbound_segments[0], outbound_segments[-1]
-        in_first, in_last = inbound_segments[0], inbound_segments[-1]
+        out_first = outbound_segments[0]
+        out_last = outbound_segments[-1]
 
-        if (
-            out_first.get("originAirport") != user_origin
-            or out_last.get("destinationAirport") != user_destination
-        ):
+        in_first = inbound_segments[0]
+        in_last = inbound_segments[-1]
+
+        out_origin = out_first.get("originAirport")
+        out_destination = out_last.get("destinationAirport")
+
+        in_origin = in_first.get("originAirport")
+        in_destination = in_last.get("destinationAirport")
+
+        if out_origin != user_origin:
             continue
 
-        if (
-            in_first.get("originAirport") != user_destination
-            or in_last.get("destinationAirport") != user_origin
-        ):
+        if in_destination != user_origin:
             continue
 
         results.append(
@@ -206,25 +231,28 @@ def fetch_round_trip_from_external_api(
                     "airline": out_first.get("carrierContent", {}).get("carrierName"),
                     "airline_code": out_first.get("carrierContent", {}).get("carrierCode"),
                     "flight_number": out_first.get("flightNumber"),
-                    "origin": out_first.get("originAirport"),
-                    "destination": out_last.get("destinationAirport"),
-                    "route": f"{out_first.get('originAirport')} → {out_last.get('destinationAirport')}",
+                    "origin": out_origin,
+                    "destination": out_destination,
+                    "route": f"{out_origin} → {out_destination}",
                     "departure_time": out_first.get("departDateTime"),
                     "arrival_time": out_last.get("arrivalDateTime"),
-                    "duration_minutes": bundle.get("outboundSlice", {}).get("duration"),
+                    "duration_minutes": outbound_slice.get("duration"),
                 },
                 "inbound": {
                     "airline": in_first.get("carrierContent", {}).get("carrierName"),
                     "airline_code": in_first.get("carrierContent", {}).get("carrierCode"),
                     "flight_number": in_first.get("flightNumber"),
-                    "origin": in_first.get("originAirport"),
-                    "destination": in_last.get("destinationAirport"),
-                    "route": f"{in_first.get('originAirport')} → {in_last.get('destinationAirport')}",
+                    "origin": in_origin,
+                    "destination": in_destination,
+                    "route": f"{in_origin} → {in_destination}",
                     "departure_time": in_first.get("departDateTime"),
                     "arrival_time": in_last.get("arrivalDateTime"),
-                    "duration_minutes": itineraries[0].get("inboundSlice", {}).get("duration"),
+                    "duration_minutes": inbound_slice.get("duration"),
                 },
             }
         )
+
+    # 🔹 Log how many results passed filters
+    logger.info("Round trip results: %s", len(results))
 
     return results

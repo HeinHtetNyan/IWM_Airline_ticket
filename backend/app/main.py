@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
 
-from backend.app.api.router import api_router
+from backend.app.api.router import api_router, health_router
 from backend.app.db.base import Base
 from backend.app.db.session import SessionLocal, engine
 from backend.app.core.config import settings
@@ -86,7 +86,8 @@ app = FastAPI(
     title="Air Ticket Booking API",
     description="Backend API for flight search and booking system",
     version="1.0.0",
-    root_path="/api",
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
 
@@ -102,7 +103,8 @@ app.add_middleware(
 
 
 # Routers
-app.include_router(api_router)
+app.include_router(api_router, prefix="/api")
+app.include_router(health_router)
 
 
 # Root endpoint
