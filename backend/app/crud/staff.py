@@ -10,7 +10,7 @@ def get_staff_list(db: Session):
         db.query(AdminUser)
         .filter(
             AdminUser.role == "STAFF",
-            AdminUser.is_active == True
+            AdminUser.is_active.is_(True)
         )
         .all()
     )
@@ -75,7 +75,7 @@ def count_super_admins(db):
         db.query(AdminUser)
         .filter(
             AdminUser.role == "SUPER_ADMIN",
-            AdminUser.is_active == True
+            AdminUser.is_active.is_(True)
         )
         .count()
     )
