@@ -104,8 +104,6 @@ app.add_middleware(
 
 # Routers
 app.include_router(api_router, prefix="/api")
-app.include_router(health_router)
-
 
 # Root endpoint
 @app.get("/")
