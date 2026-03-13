@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from uuid import UUID
@@ -63,45 +63,37 @@ def admin_me(admin: AdminUser = Depends(require_admin)):
 # DASHBOARD
 @router.get("/dashboard", response_model=AdminDashboard)
 def admin_dashboard(
+    request: Request,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    mm_tz = ZoneInfo("Asia/Yangon")
-    today_start = datetime.now(mm_tz).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC"))
+    tz_name = request.headers.get("X-Timezone", "UTC")
+    try:
+        local_tz = ZoneInfo(tz_name)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid X-Timezone header")
 
-    total_paid_bookings = db.query(func.count(Booking.id)).filter(
-        Booking.payment_status == "PAID",
-        Booking.status != "CANCELLED"
-    ).scalar()
+    today_start = datetime.now(local_tz).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC"))
 
-    revenue_totals = db.query(
+    total_paid_bookings, revenue_usd, revenue_mmk = db.query(
+        func.count(Booking.id),
         func.coalesce(func.sum(Booking.final_price_usd), 0),
         func.coalesce(func.sum(Booking.final_price_mmk), 0),
     ).filter(
         Booking.payment_status == "PAID",
         Booking.status != "CANCELLED"
-    ).first()
+    ).one()
 
-    processing = db.query(func.count(Booking.id)).filter(
-        Booking.status == "PROCESSING"
-    ).scalar()
+    status_counts = dict(
+        db.query(Booking.status, func.count(Booking.id))
+        .group_by(Booking.status)
+        .all()
+    )
 
     paid_processing = db.query(func.count(Booking.id)).filter(
         Booking.status == "PROCESSING",
         Booking.payment_status == "PAID",
         Booking.status != "CANCELLED"
-    ).scalar()
-
-    confirmed = db.query(func.count(Booking.id)).filter(
-        Booking.status == "CONFIRMED"
-    ).scalar()
-
-    completed = db.query(func.count(Booking.id)).filter(
-        Booking.status == "COMPLETED"
-    ).scalar()
-
-    cancelled = db.query(func.count(Booking.id)).filter(
-        Booking.status == "CANCELLED"
     ).scalar()
 
     bookings_today = db.query(func.count(Booking.id)).filter(
@@ -115,20 +107,20 @@ def admin_dashboard(
         Booking.payment_status == "PAID",
         Booking.status != "CANCELLED",
         Booking.created_at >= today_start
-    ).first()
+    ).one()
 
     return AdminDashboard(
         financial=DashboardFinancial(
             total_paid_bookings=total_paid_bookings,
-            total_revenue_usd=revenue_totals[0],
-            total_revenue_mmk=revenue_totals[1],
+            total_revenue_usd=revenue_usd,
+            total_revenue_mmk=revenue_mmk,
         ),
         operational=DashboardOperational(
-            processing=processing,
+            processing=status_counts.get("PROCESSING", 0),
             paid_processing=paid_processing,
-            confirmed=confirmed,
-            completed=completed,
-            cancelled=cancelled,
+            confirmed=status_counts.get("CONFIRMED", 0),
+            completed=status_counts.get("COMPLETED", 0),
+            cancelled=status_counts.get("CANCELLED", 0),
         ),
         today=DashboardToday(
             bookings_today=bookings_today,
@@ -422,11 +414,10 @@ def get_booking_audit(
     def get_admin_info(admin_id):
         if not admin_id:
             return None
-        admin = db.query(AdminUser).filter(
-            AdminUser.id == admin_id
-        ).first()
-        if not admin:
-            return None
+        admin_obj = db.get(AdminUser, admin_id)
+        if not admin_obj:
+            raise HTTPException(status_code=404, detail=f"Admin {admin_id} referenced in audit was not found")
+        admin = admin_obj
         return {
             "id": str(admin.id),
             "email": admin.email,

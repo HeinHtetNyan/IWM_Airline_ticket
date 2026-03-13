@@ -2,6 +2,7 @@ import logging
 from typing import Dict, List
 
 import httpx
+from fastapi import HTTPException
 
 from backend.app.core.config import settings
 
@@ -36,9 +37,7 @@ def _request(url: str, headers: dict, params: dict) -> dict:
             logger.warning("External flight API bad response: %s", str(exc))
 
     logger.error("External flight API failed after retries", exc_info=last_error)
-
-    # IMPORTANT: do NOT crash the API
-    return {}
+    raise HTTPException(status_code=503, detail="Flight provider unavailable")
 
 
 def fetch_flights_from_external_api(

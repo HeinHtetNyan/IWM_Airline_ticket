@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, constr
 
 from backend.app.schemas.passenger import PassengerOut
 
@@ -30,6 +30,8 @@ class BookingCreate(BaseModel):
     type: BookingType
     adults: int = Field(..., gt=0, le=9)
     bundle_key: Optional[str] = None
+    airline_code: constr(min_length=2, max_length=3)
+    flight_number: constr(min_length=1)
     flight_snapshot: Dict[str, Any]
 
 
