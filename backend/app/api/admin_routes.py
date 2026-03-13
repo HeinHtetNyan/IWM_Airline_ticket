@@ -45,6 +45,8 @@ from backend.app.models.exchange_rate import ExchangeRate
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from backend.app.schemas.staff import StaffResponse, StaffUpdate
 from backend.app.crud import staff as staff_crud
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -71,7 +73,8 @@ def admin_dashboard(
     try:
         local_tz = ZoneInfo(tz_name)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid X-Timezone header")
+        logger.warning(f"Invalid timezone received: {tz_name}")
+        local_tz = ZoneInfo("UTC")
 
     today_start = datetime.now(local_tz).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC"))
 
