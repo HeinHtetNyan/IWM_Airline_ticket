@@ -26,7 +26,7 @@ class _AuthBase(BaseModel):
 
         # bcrypt limit
         if len(v.encode("utf-8")) > 72:
-            raise ValueError("Password cannot exceed 72 characters")
+            raise ValueError("Password cannot exceed 72 bytes")
 
         return v
 
