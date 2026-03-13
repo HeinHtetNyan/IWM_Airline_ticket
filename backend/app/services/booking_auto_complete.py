@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.models.airport import Airport
 from backend.app.models.booking import Booking
 
+logger = logging.getLogger(__name__)
 
 def _to_utc(dt_str: str, tz_name: str) -> datetime:
     parsed = datetime.fromisoformat(dt_str)
@@ -65,7 +67,8 @@ def auto_complete_bookings(db: Session):
 
     try:
         db.commit()
-    except Exception:
+    except Exception as exc:
+        logger.exception("Failed to auto-complete bookings: %s", exc)
         db.rollback()
         raise
 

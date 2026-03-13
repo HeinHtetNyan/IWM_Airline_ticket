@@ -13,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -33,6 +34,9 @@ class Booking(Base):
         CheckConstraint("payment_status IN ('PENDING','PAID','FAILED')", name="ck_payment_status"),
         CheckConstraint("final_price_usd >= 0", name="ck_final_price_usd_non_negative"),
         CheckConstraint("final_price_mmk >= 0", name="ck_final_price_mmk_non_negative"),
+        Index("idx_booking_status", "status"),
+        Index("idx_booking_payment_status", "payment_status"),
+        Index("idx_booking_created_at", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -80,6 +80,8 @@ def create_booking(
     current_user: CustomerUser = Depends(get_current_customer),
 ):
     snapshot = _validate_snapshot(payload)
+    snapshot.setdefault("airline_code", payload.airline_code)
+    snapshot.setdefault("flight_number", payload.flight_number)
 
     # Always recalculate pricing on the server from trusted pricing rules.
     calculated = calculate_booking_totals(db, snapshot, payload.adults, payload.type)

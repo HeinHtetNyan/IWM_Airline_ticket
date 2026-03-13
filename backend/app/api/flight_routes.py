@@ -1,5 +1,7 @@
 from collections import defaultdict, deque
+import logging
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 from threading import Lock
 import json
 
@@ -19,6 +21,7 @@ from backend.app.services.pricing_engine import (
 )
 
 router = APIRouter(prefix="/flights", tags=["flights"])
+logger = logging.getLogger(__name__)
 
 _RATE_LIMIT_REQUESTS = 30 # max 30 search requests per minute per IP
 _RATE_LIMIT_SECONDS = 60 # 60 seconds window for rate limiting
@@ -59,13 +62,20 @@ def _enforce_search_rate_limit(request: Request) -> None:
         history.append(now)
 
 
-def _parse_date(value: str, field_name: str) -> date:
+def _parse_date(value: str, field_name: str, request: Request) -> date:
     try:
         parsed = date.fromisoformat(value)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"{field_name} must be YYYY-MM-DD")
 
-    if parsed < date.today():
+    tz_name = request.headers.get("X-Timezone", "UTC")
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid X-Timezone header")
+
+    today = datetime.now(tz).date()
+    if parsed < today:
         raise HTTPException(status_code=400, detail=f"{field_name} cannot be in the past")
 
     return parsed
@@ -77,18 +87,19 @@ def search_flights(
     origin: str,
     destination: str,
     departure_date: str,
-    page: int = Query(1, ge=1),
-    adults: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=100),
+    adults: int = Query(1, ge=1, le=50),
     db: Session = Depends(get_db),
 ):
     _enforce_search_rate_limit(request)
-    _parse_date(departure_date, "departure_date")
+    _parse_date(departure_date, "departure_date", request)
 
     cache_key = f"flight:{origin}:{destination}:{departure_date}:{page}:{adults}"
 
     try:
         cached = redis_client.get(cache_key)
     except Exception:
+        logger.exception("Redis cache read failure")
         cached = None
 
     if cached:
@@ -106,7 +117,7 @@ def search_flights(
         try:
             redis_client.set(cache_key, json.dumps(api_flights), ex=settings.FLIGHT_CACHE_TTL)
         except Exception:
-            pass
+            logger.exception("Redis cache write failure")
 
     return apply_pricing_logic(db, api_flights, adults)
 
@@ -118,14 +129,14 @@ def search_round_trip(
     destination: str,
     departure_date: str,
     return_date: str,
-    page: int = Query(1, ge=1),
-    adults: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=100),
+    adults: int = Query(1, ge=1, le=50),
     db: Session = Depends(get_db),
 ):
     _enforce_search_rate_limit(request)
 
-    dep = _parse_date(departure_date, "departure_date")
-    ret = _parse_date(return_date, "return_date")
+    dep = _parse_date(departure_date, "departure_date", request)
+    ret = _parse_date(return_date, "return_date", request)
 
     if ret < dep:
         raise HTTPException(
@@ -138,6 +149,7 @@ def search_round_trip(
     try:
         cached = redis_client.get(cache_key)
     except Exception:
+        logger.exception("Redis cache read failure")
         cached = None
 
     if cached:
@@ -156,6 +168,6 @@ def search_round_trip(
         try:
             redis_client.set(cache_key, json.dumps(bundles), ex=settings.FLIGHT_CACHE_TTL) # redis 15 minutes cache 
         except Exception:
-            pass
+            logger.exception("Redis cache write failure")
 
     return apply_round_trip_pricing_logic(db, bundles, adults)
