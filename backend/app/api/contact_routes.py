@@ -21,6 +21,7 @@ def create_or_update_contact(
     contact = (
         db.query(CustomerContact)
         .filter(CustomerContact.customer_id == current_user.id)
+        .with_for_update()
         .first()
     )
 

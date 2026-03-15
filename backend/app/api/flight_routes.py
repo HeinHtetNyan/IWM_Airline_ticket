@@ -105,8 +105,15 @@ def search_flights(
     if cached:
         if isinstance(cached, bytes):
             cached = cached.decode()
-        api_flights = json.loads(cached)
+        try:
+            api_flights = json.loads(cached)
+        except (json.JSONDecodeError, TypeError):
+            redis_client.delete(cache_key)
+            api_flights = None
     else:
+        api_flights = None
+
+    if api_flights is None:
         api_flights = fetch_flights_from_external_api(
             origin=origin,
             destination=destination,
@@ -155,8 +162,15 @@ def search_round_trip(
     if cached:
         if isinstance(cached, bytes):
             cached = cached.decode()
-        bundles = json.loads(cached)
+        try:
+            bundles = json.loads(cached)
+        except (json.JSONDecodeError, TypeError):
+            redis_client.delete(cache_key)
+            bundles = None
     else:
+        bundles = None
+
+    if bundles is None:
         bundles = fetch_round_trip_from_external_api(
             origin=origin,
             destination=destination,

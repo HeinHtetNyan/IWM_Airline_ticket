@@ -19,6 +19,13 @@ from backend.app.services.pricing_engine import calculate_booking_totals
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
+def _safe_load_flight_snapshot(snapshot: str | None) -> dict:
+    try:
+        return json.loads(snapshot)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
 def _require_non_empty_str(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
     value = data.get(field)
     if not isinstance(value, str) or not value.strip():
@@ -130,7 +137,7 @@ def create_booking(
         type=booking.type,
         adults=booking.adults,
         bundle_key=booking.bundle_key,
-        flight_snapshot=json.loads(booking.flight_snapshot),
+        flight_snapshot=_safe_load_flight_snapshot(booking.flight_snapshot),
         final_price_usd=float(booking.final_price_usd),
         final_price_mmk=float(booking.final_price_mmk),
         status=booking.status,
@@ -208,7 +215,7 @@ def list_my_bookings(
             type=b.type,
             adults=b.adults,
             bundle_key=b.bundle_key,
-            flight_snapshot=json.loads(b.flight_snapshot),
+            flight_snapshot=_safe_load_flight_snapshot(b.flight_snapshot),
             final_price_usd=float(b.final_price_usd),
             final_price_mmk=float(b.final_price_mmk),
             status=b.status,
@@ -239,7 +246,7 @@ def get_my_booking_detail(
         type=booking.type,
         adults=booking.adults,
         bundle_key=booking.bundle_key,
-        flight_snapshot=json.loads(booking.flight_snapshot),
+        flight_snapshot=_safe_load_flight_snapshot(booking.flight_snapshot),
         final_price_usd=float(booking.final_price_usd),
         final_price_mmk=float(booking.final_price_mmk),
         status=booking.status,

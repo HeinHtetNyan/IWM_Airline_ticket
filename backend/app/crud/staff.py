@@ -10,8 +10,8 @@ def get_staff_list(db: Session):
         db.query(AdminUser)
         .filter(
             AdminUser.role == "STAFF",
-            AdminUser.is_active.is_(True)
         )
+        .order_by(AdminUser.is_active.desc())
         .all()
     )
 
@@ -20,6 +20,7 @@ def get_all_staff(db: Session):
     return (
         db.query(AdminUser)
         .filter(AdminUser.role == "STAFF")
+        .order_by(AdminUser.is_active.desc())
         .all()
     )
 
@@ -68,14 +69,3 @@ def activate_staff(db: Session, staff: AdminUser):
     db.commit()
     db.refresh(staff)
     return staff
-
-
-def count_super_admins(db):
-    return (
-        db.query(AdminUser)
-        .filter(
-            AdminUser.role == "SUPER_ADMIN",
-            AdminUser.is_active.is_(True)
-        )
-        .count()
-    )

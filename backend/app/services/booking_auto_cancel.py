@@ -29,7 +29,11 @@ def auto_cancel_expired_bookings(db: Session, expire_minutes: int = 30):
         booking.status_updated_at = now
         cancelled_count += 1
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "expired_found": len(expired_bookings),
