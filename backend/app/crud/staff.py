@@ -52,11 +52,6 @@ def update_staff(db: Session, staff: AdminUser, data: dict):
     return staff
 
 
-def delete_staff(db: Session, staff: AdminUser):
-    db.delete(staff)
-    db.commit()
-
-
 def deactivate_staff(db: Session, staff: AdminUser):
     staff.is_active = False
     db.commit()

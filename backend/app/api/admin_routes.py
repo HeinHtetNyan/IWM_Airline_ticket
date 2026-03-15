@@ -44,7 +44,9 @@ from backend.app.models.exchange_rate import ExchangeRate
 
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from backend.app.schemas.staff import StaffResponse, StaffUpdate
+from backend.app.schemas.customer_user import CustomerUserResponse, CustomerUserUpdate
 from backend.app.crud import staff as staff_crud
+from backend.app.crud import customer_users as customer_user_crud
 import logging
 logger = logging.getLogger(__name__)
 
@@ -586,24 +588,72 @@ def activate_staff(
     return staff_crud.activate_staff(db, staff)
 
 
-#delete staff
-@router.delete("/staff/{staff_id}")
-def delete_staff(
-    staff_id: UUID,
+#customer management
+#list customers
+@router.get("/customers", response_model=list[CustomerUserResponse])
+def list_customers(
     db: Session = Depends(get_db),
-    current_admin: AdminUser = Depends(require_super_admin),
+    _: str = Depends(require_super_admin)
 ):
-    staff = staff_crud.get_staff(db, staff_id)
+    return customer_user_crud.get_customers(db)
 
-    if not staff:
-        raise HTTPException(status_code=404, detail="Staff not found")
 
-    if staff.id == current_admin.id:
-        raise HTTPException(
-            status_code=400,
-            detail="You cannot delete your own account"
-        )
+#get customer detail
+@router.get("/customers/{customer_id}", response_model=CustomerUserResponse)
+def get_customer(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin)
+):
+    customer = customer_user_crud.get_customer(db, customer_id)
 
-    staff_crud.delete_staff(db, staff)
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
 
-    return {"message": "Staff deleted"}
+    return customer
+
+
+#update customer
+@router.patch("/customers/{customer_id}", response_model=CustomerUserResponse)
+def update_customer(
+    customer_id: UUID,
+    payload: CustomerUserUpdate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin)
+):
+    customer = customer_user_crud.get_customer(db, customer_id)
+
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    return customer_user_crud.update_customer(db, customer, payload.model_dump(exclude_unset=True))
+
+
+#deactivate customer
+@router.patch("/customers/{customer_id}/deactivate", response_model=CustomerUserResponse)
+def deactivate_customer(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin),
+):
+    customer = customer_user_crud.get_customer(db, customer_id)
+
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    return customer_user_crud.deactivate_customer(db, customer)
+
+
+#activate customer
+@router.patch("/customers/{customer_id}/activate", response_model=CustomerUserResponse)
+def activate_customer(
+    customer_id: UUID,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_super_admin),
+):
+    customer = customer_user_crud.get_customer(db, customer_id)
+
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    return customer_user_crud.activate_customer(db, customer)
