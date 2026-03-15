@@ -42,3 +42,4 @@ apscheduler>=3.11.2,<4.0
 # Utilities & compatibility
 anyio>=4.6.0
 typing-extensions>=4.12.0
+
