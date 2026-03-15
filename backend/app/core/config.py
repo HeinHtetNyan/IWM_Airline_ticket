@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     # CORS
     CORS_ALLOW_ORIGINS: list[str] = [
         "http://localhost:3000",
-        "http://localhost:5173",
+        "http://localhost:5173", #for testing with vitest frontend
+        "http://localhost:5174", #for testing with vitest frontend
         "https://yourdomain.com",
     ]
 
