@@ -51,7 +51,7 @@ class Booking(Base):
     booking_code: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     customer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("customer_users.id"), nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
-    bundle_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    bundle_key: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     adults: Mapped[int] = mapped_column(Integer, nullable=False)
     flight_snapshot: Mapped[str] = mapped_column(Text, nullable=False)
 

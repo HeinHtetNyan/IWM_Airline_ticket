@@ -26,6 +26,7 @@ def auto_complete_bookings(db: Session):
         try:
             snapshot = json.loads(booking.flight_snapshot)
         except Exception:
+            logger.exception("Failed to parse flight_snapshot for booking %s", booking.id)
             continue
 
         if booking.type == "ONE_WAY":
@@ -41,6 +42,7 @@ def auto_complete_bookings(db: Session):
                     booking.status = "COMPLETED"
                     completed_count += 1
             except Exception:
+                logger.exception("Failed to auto-complete one-way booking %s", booking.id)
                 continue
 
         elif booking.type == "ROUND_TRIP":
@@ -59,6 +61,11 @@ def auto_complete_bookings(db: Session):
                     if _to_utc(dep_str, airport.timezone) < now_utc:
                         setattr(booking, flag, True)
                 except Exception:
+                    logger.exception(
+                        "Failed to auto-complete %s leg for booking %s",
+                        leg_name,
+                        booking.id,
+                    )
                     continue
 
             if booking.outbound_completed and booking.inbound_completed:

@@ -10,9 +10,6 @@ _MAX_TRACKED_KEYS = 20_000
 
 
 def _client_key(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 

@@ -49,6 +49,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+VALID_BOOKING_STATUSES = {"PROCESSING", "CONFIRMED", "COMPLETED", "CANCELLED"}
+
+
+def _safe_load_flight_snapshot(flight_snapshot: str | None) -> dict:
+    try:
+        return json.loads(flight_snapshot)
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 # ADMIN IDENTITY
 @router.get("/me")
@@ -183,6 +191,8 @@ def list_all_bookings(
     query = db.query(Booking)
 
     if status:
+        if status not in VALID_BOOKING_STATUSES:
+            raise HTTPException(status_code=400, detail="Invalid booking status")
         query = query.filter(Booking.status == status)
 
     bookings = query.order_by(Booking.created_at.desc()).offset(offset).limit(limit).all()
@@ -194,7 +204,7 @@ def list_all_bookings(
             type=b.type,
             adults=b.adults,
             bundle_key=b.bundle_key,
-            flight_snapshot=json.loads(b.flight_snapshot),
+            flight_snapshot=_safe_load_flight_snapshot(b.flight_snapshot),
             final_price_usd=b.final_price_usd,
             final_price_mmk=b.final_price_mmk,
             status=b.status,
@@ -254,7 +264,12 @@ def update_payment_status(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id)
+        .with_for_update()
+        .first()
+    )
 
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
@@ -302,7 +317,12 @@ def update_booking_status(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id)
+        .with_for_update()
+        .first()
+    )
 
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
@@ -419,7 +439,11 @@ def get_booking_audit(
             return None
         admin_obj = db.get(AdminUser, admin_id)
         if not admin_obj:
-            raise HTTPException(status_code=404, detail=f"Admin {admin_id} referenced in audit was not found")
+            return {
+                "id": str(admin_id),
+                "email": None,
+                "name": "[deleted]",
+            }
         admin = admin_obj
         return {
             "id": str(admin.id),
@@ -544,16 +568,6 @@ def deactivate_staff(
             detail="You cannot deactivate your own account"
         )
 
-    # Prevent removing last SUPER_ADMIN
-    if staff.role == "SUPER_ADMIN":
-        total_super_admins = staff_crud.count_super_admins(db)
-
-        if total_super_admins <= 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot deactivate the last SUPER_ADMIN"
-            )
-
     return staff_crud.deactivate_staff(db, staff)
 
 
@@ -589,15 +603,6 @@ def delete_staff(
             status_code=400,
             detail="You cannot delete your own account"
         )
-
-    if staff.role == "SUPER_ADMIN":
-        total_super_admins = staff_crud.count_super_admins(db)
-
-        if total_super_admins <= 1:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot delete the last SUPER_ADMIN"
-            )
 
     staff_crud.delete_staff(db, staff)
 

@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict, List
 
 import httpx
@@ -16,9 +17,11 @@ logger = logging.getLogger(__name__)
 def _request(url: str, headers: dict, params: dict) -> dict:
     last_error = None
 
-    for _ in range(3):  # retry 3 times
+    for attempt in range(3):  # retry 3 times
         try:
-            with httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+            with httpx.Client(
+                timeout=httpx.Timeout(20.0, connect=5.0)
+            ) as client:
                 response = client.get(url, headers=headers, params=params)
 
             response.raise_for_status()
@@ -26,7 +29,7 @@ def _request(url: str, headers: dict, params: dict) -> dict:
 
         except httpx.TimeoutException as exc:
             last_error = exc
-            logger.warning("External flight API timeout")
+            logger.warning("External flight API timeout: %s", str(exc))
 
         except httpx.RequestError as exc:
             last_error = exc
@@ -35,6 +38,9 @@ def _request(url: str, headers: dict, params: dict) -> dict:
         except httpx.HTTPStatusError as exc:
             last_error = exc
             logger.warning("External flight API bad response: %s", str(exc))
+
+        if attempt < 2:
+            time.sleep(2 ** attempt)
 
     logger.error("External flight API failed after retries", exc_info=last_error)
     raise HTTPException(status_code=503, detail="Flight provider unavailable")
@@ -125,7 +131,6 @@ def fetch_flights_from_external_api(
     return all_flights
 
 
-
 def fetch_round_trip_from_external_api(
     *,
     origin: str,
@@ -156,7 +161,6 @@ def fetch_round_trip_from_external_api(
     bundles = data.get("data", {}).get("bundles", [])
     results: List[Dict] = []
 
-    # 🔹 Log API request info
     logger.info(
         "Round-trip search: %s -> %s | depart=%s return=%s",
         user_origin,
@@ -165,7 +169,6 @@ def fetch_round_trip_from_external_api(
         return_date,
     )
 
-    # 🔹 Log how many bundles external API returned
     logger.info("External API bundles: %s", len(bundles))
 
     for bundle in bundles:
@@ -228,7 +231,9 @@ def fetch_round_trip_from_external_api(
                 "base_price_usd": float(price),
                 "outbound": {
                     "airline": out_first.get("carrierContent", {}).get("carrierName"),
-                    "airline_code": out_first.get("carrierContent", {}).get("carrierCode"),
+                    "airline_code": out_first.get("carrierContent", {}).get(
+                        "carrierCode"
+                    ),
                     "flight_number": out_first.get("flightNumber"),
                     "origin": out_origin,
                     "destination": out_destination,
@@ -239,7 +244,9 @@ def fetch_round_trip_from_external_api(
                 },
                 "inbound": {
                     "airline": in_first.get("carrierContent", {}).get("carrierName"),
-                    "airline_code": in_first.get("carrierContent", {}).get("carrierCode"),
+                    "airline_code": in_first.get("carrierContent", {}).get(
+                        "carrierCode"
+                    ),
                     "flight_number": in_first.get("flightNumber"),
                     "origin": in_origin,
                     "destination": in_destination,
@@ -251,7 +258,6 @@ def fetch_round_trip_from_external_api(
             }
         )
 
-    # 🔹 Log how many results passed filters
     logger.info("Round trip results: %s", len(results))
 
     return results
