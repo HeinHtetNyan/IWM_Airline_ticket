@@ -1,15 +1,45 @@
+# requirements.txt
+# ────────────────────────────────────────────────────────────────
+# Core web framework & server
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.6
+
+# Database & async support
 sqlalchemy>=2.0.35
-psycopg2-binary>=2.9.9
+asyncpg>=0.30.0               # async PostgreSQL driver
+psycopg2-binary>=2.9.9        # sync PostgreSQL driver (useful for alembic, scripts)
+
+# Migrations
+alembic>=1.13.3
+
+# Configuration & environment
 python-dotenv>=1.0.1
+pydantic>=2.9.2
 pydantic-settings>=2.5.2
-passlib==1.7.4
+
+#redis
+redis>=5.0.0
+
+# Authentication & security
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.1                 # explicit (sometimes needed for reproducibility)
 python-jose[cryptography]>=3.3.0
-python-multipart>=0.0.9
+pyjwt>=2.8.0
+
+# HTTP clients
 httpx>=0.27.0
 requests>=2.32.3
+
+# File uploads / form data
+python-multipart>=0.0.9
+
+# Email & validation
 email-validator>=2.2.0
+
+# Scheduling / background tasks
 apscheduler>=3.11.2,<4.0
-redis==5.0.4
-bcrypt==3.2.2
+
+# Utilities & compatibility
+anyio>=4.6.0
+typing-extensions>=4.12.0
+
