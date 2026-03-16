@@ -1,13 +1,12 @@
-from collections import defaultdict, deque
 import logging
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
-from threading import Lock
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
+from backend.app.core.rate_limit import enforce_rate_limit
 from backend.app.db.deps import get_db
 from backend.app.core.redis import redis_client
 from backend.app.core.config import settings
@@ -25,41 +24,23 @@ logger = logging.getLogger(__name__)
 
 _RATE_LIMIT_REQUESTS = 30 # max 30 search requests per minute per IP
 _RATE_LIMIT_SECONDS = 60 # 60 seconds window for rate limiting
-_MAX_TRACKED_IPS = 10_000 # To prevent unbounded memory growth
-
-_rate_limit_lock = Lock()
-_request_history: dict[str, deque[datetime]] = defaultdict(deque)
-
-
-def _client_key(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    client = request.client.host if request.client else "unknown"
-    return client
 
 
 def _enforce_search_rate_limit(request: Request) -> None:
-    key = _client_key(request)
-    now = datetime.now(timezone.utc)
-
-    with _rate_limit_lock:
-        if len(_request_history) >= _MAX_TRACKED_IPS and key not in _request_history:
-            oldest_key = next(iter(_request_history))
-            del _request_history[oldest_key]
-
-        history = _request_history[key]
-
-        while history and (now - history[0]).total_seconds() > _RATE_LIMIT_SECONDS:
-            history.popleft()
-
-        if len(history) >= _RATE_LIMIT_REQUESTS:
+    try:
+        enforce_rate_limit(
+            request,
+            action="flight_search",
+            max_requests=_RATE_LIMIT_REQUESTS,
+            window_seconds=_RATE_LIMIT_SECONDS,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 429:
             raise HTTPException(
                 status_code=429,
                 detail="Too many search requests. Please try again shortly.",
-            )
-
-        history.append(now)
+            ) from exc
+        raise
 
 
 def _parse_date(value: str, field_name: str, request: Request) -> date:

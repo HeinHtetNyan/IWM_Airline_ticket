@@ -17,6 +17,7 @@ from backend.app.schemas.passenger import PassengerBulkCreate, PassengerOut
 from backend.app.services.pricing_engine import calculate_booking_totals
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
+_DUPLICATE_BOOKING_WINDOW_SECONDS = 10
 
 
 def _safe_load_flight_snapshot(snapshot: str | None) -> dict:
@@ -24,6 +25,10 @@ def _safe_load_flight_snapshot(snapshot: str | None) -> dict:
         return json.loads(snapshot)
     except (json.JSONDecodeError, TypeError):
         return {}
+
+
+def _canonical_snapshot(snapshot: dict) -> str:
+    return json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
 
 
 def _require_non_empty_str(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
@@ -96,32 +101,33 @@ def create_booking(
     snapshot["base_price_usd"] = float(calculated["base_price_usd"])
     snapshot["final_price_usd"] = float(calculated["final_price_usd"])
     snapshot["final_price_mmk"] = float(calculated["final_price_mmk"])
+    canonical_snapshot = _canonical_snapshot(snapshot)
 
     calculated_total_usd = calculated["final_price_usd"]
     calculated_total_mmk = calculated["final_price_mmk"]
 
-    # Anti-spam only when key exists.
+    duplicate_cutoff = datetime.now(timezone.utc) - timedelta(seconds=_DUPLICATE_BOOKING_WINDOW_SECONDS)
+    duplicate_filters = [
+        Booking.customer_id == current_user.id,
+        Booking.status == "PROCESSING",
+        Booking.created_at >= duplicate_cutoff,
+        Booking.type == payload.type,
+        Booking.adults == payload.adults,
+        Booking.flight_snapshot == canonical_snapshot,
+    ]
     if payload.bundle_key:
-        ten_seconds_ago = datetime.now(timezone.utc) - timedelta(seconds=10)
-        existing = (
-            db.query(Booking)
-            .filter(
-                Booking.customer_id == current_user.id,
-                Booking.bundle_key == payload.bundle_key,
-                Booking.status == "PROCESSING",
-                Booking.created_at >= ten_seconds_ago,
-            )
-            .first()
-        )
-        if existing:
-            raise HTTPException(status_code=400, detail="Duplicate booking detected. Please wait a few seconds.")
+        duplicate_filters.append(Booking.bundle_key == payload.bundle_key)
+
+    existing = db.query(Booking).filter(*duplicate_filters).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Duplicate booking detected. Please wait a few seconds.")
 
     booking = Booking(
         customer_id=current_user.id,
         type=payload.type,
         adults=payload.adults,
         bundle_key=payload.bundle_key,
-        flight_snapshot=json.dumps(snapshot),
+        flight_snapshot=canonical_snapshot,
         final_price_usd=calculated_total_usd,
         final_price_mmk=calculated_total_mmk,
         status="PROCESSING",

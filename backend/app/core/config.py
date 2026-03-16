@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str
     FLIGHT_CACHE_TTL: int = 900
-
+    TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,172.16.0.0/12"
+    
     # DB Pool
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 40
