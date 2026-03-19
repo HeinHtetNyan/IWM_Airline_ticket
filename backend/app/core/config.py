@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,9 +26,16 @@ class Settings(BaseSettings):
     TICKET_API_KEY: str
 
     # Redis
+    REDIS_PASSWORD: str = ""
     REDIS_URL: str
     FLIGHT_CACHE_TTL: int = 900
     TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,172.16.0.0/12"
+
+    @model_validator(mode="after")
+    def _expand_redis_url(self) -> "Settings":
+        if self.REDIS_PASSWORD:
+            self.REDIS_URL = self.REDIS_URL.replace("${REDIS_PASSWORD}", self.REDIS_PASSWORD)
+        return self
     
     # DB Pool
     DB_POOL_SIZE: int = 20

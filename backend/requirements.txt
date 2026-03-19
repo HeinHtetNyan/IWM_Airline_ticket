@@ -39,6 +39,9 @@ email-validator>=2.2.0
 # Scheduling / background tasks
 apscheduler>=3.11.2,<4.0
 
+# Timezone data (required by zoneinfo on slim Docker images)
+tzdata>=2024.1
+
 # Utilities & compatibility
 anyio>=4.6.0
 typing-extensions>=4.12.0
