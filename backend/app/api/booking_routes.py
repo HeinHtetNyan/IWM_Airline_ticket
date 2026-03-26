@@ -12,7 +12,7 @@ from backend.app.db.deps import get_db
 from backend.app.models.booking import Booking
 from backend.app.models.booking_passenger import BookingPassenger as Passenger
 from backend.app.models.customer_user import CustomerUser
-from backend.app.schemas.booking import BookingCreate, BookingOut
+from backend.app.schemas.booking import BookingCreate, CustomerBookingOut
 from backend.app.schemas.passenger import PassengerBulkCreate, PassengerOut
 from backend.app.services.pricing_engine import calculate_booking_totals
 
@@ -85,7 +85,7 @@ def _validate_snapshot(payload: BookingCreate) -> dict:
     return snapshot
 
 
-@router.post("/", response_model=BookingOut)
+@router.post("/", response_model=CustomerBookingOut)
 def create_booking(
     payload: BookingCreate,
     db: Session = Depends(get_db),
@@ -137,7 +137,7 @@ def create_booking(
     db.commit()
     db.refresh(booking)
 
-    return BookingOut(
+    return CustomerBookingOut(
         booking_id=booking.id,
         booking_code=None,
         type=booking.type,
@@ -148,6 +148,7 @@ def create_booking(
         final_price_mmk=float(booking.final_price_mmk),
         status=booking.status,
         payment_status=booking.payment_status,
+        ticket_url=None,
         created_at=booking.created_at,
         passengers=None,
     )
@@ -207,7 +208,7 @@ def add_passengers(
     return db.query(Passenger).filter(Passenger.booking_id == booking_id).all()
 
 
-@router.get("/me", response_model=List[BookingOut])
+@router.get("/me", response_model=List[CustomerBookingOut])
 def list_my_bookings(
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
@@ -215,7 +216,7 @@ def list_my_bookings(
     bookings = db.query(Booking).filter(Booking.customer_id == current_user.id).order_by(Booking.created_at.desc()).all()
 
     return [
-        BookingOut(
+        CustomerBookingOut(
             booking_id=b.id,
             booking_code=b.booking_code,
             type=b.type,
@@ -226,6 +227,7 @@ def list_my_bookings(
             final_price_mmk=float(b.final_price_mmk),
             status=b.status,
             payment_status=b.payment_status,
+            ticket_url=b.ticket_file_url if b.status == "CONFIRMED" else None,
             created_at=b.created_at,
             passengers=None,
         )
@@ -233,7 +235,7 @@ def list_my_bookings(
     ]
 
 
-@router.get("/{booking_id}", response_model=BookingOut)
+@router.get("/{booking_id}", response_model=CustomerBookingOut)
 def get_my_booking_detail(
     booking_id: UUID,
     db: Session = Depends(get_db),
@@ -246,7 +248,7 @@ def get_my_booking_detail(
 
     passengers = db.query(Passenger).filter(Passenger.booking_id == booking_id).all()
 
-    return BookingOut(
+    return CustomerBookingOut(
         booking_id=booking.id,
         booking_code=booking.booking_code,
         type=booking.type,
@@ -257,6 +259,7 @@ def get_my_booking_detail(
         final_price_mmk=float(booking.final_price_mmk),
         status=booking.status,
         payment_status=booking.payment_status,
+        ticket_url=booking.ticket_file_url if booking.status == "CONFIRMED" else None,
         created_at=booking.created_at,
         passengers=passengers,
     )

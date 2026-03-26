@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.auth.deps import get_current_admin_optional
 from backend.app.auth.security import get_password_hash, verify_password
@@ -38,7 +39,11 @@ def customer_signup(
         is_active=True,
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered")
     db.refresh(user)
 
     token = create_access_token(subject=str(user.id), role="CUSTOMER")

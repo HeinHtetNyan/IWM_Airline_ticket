@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     DB_POOL_RECYCLE: int = 1800
 
+    # Booking retention
+    CANCELLED_BOOKING_DELETE_DAYS: int = 7
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

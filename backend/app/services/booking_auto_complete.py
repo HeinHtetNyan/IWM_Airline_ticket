@@ -40,6 +40,7 @@ def auto_complete_bookings(db: Session):
             try:
                 if _to_utc(departure_time_str, airport.timezone) < now_utc:
                     booking.status = "COMPLETED"
+                    booking.status_updated_at = now_utc
                     completed_count += 1
             except Exception:
                 logger.exception("Failed to auto-complete one-way booking %s", booking.id)
@@ -70,6 +71,7 @@ def auto_complete_bookings(db: Session):
 
             if booking.outbound_completed and booking.inbound_completed:
                 booking.status = "COMPLETED"
+                booking.status_updated_at = now_utc
                 completed_count += 1
 
     try:

@@ -35,7 +35,7 @@ class BookingCreate(BaseModel):
     flight_snapshot: Dict[str, Any]
 
 
-class BookingOut(BaseModel):
+class BookingBaseOut(BaseModel):
     booking_id: UUID
     booking_code: Optional[str]
     type: str
@@ -53,6 +53,14 @@ class BookingOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BookingOut(BookingBaseOut):
+    pass
+
+
+class CustomerBookingOut(BookingBaseOut):
+    ticket_url: Optional[str] = None
 
 
 class BookingStatusUpdate(BaseModel):
