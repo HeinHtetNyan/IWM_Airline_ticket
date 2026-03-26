@@ -1,9 +1,3 @@
-"""Legacy flight CRUD placeholders.
-
-The project currently sources flights from external APIs and does not persist a Flight ORM model.
-These helpers are kept to avoid import-time crashes in any legacy paths.
-"""
-
 from datetime import datetime, timezone
 from typing import Any
 
