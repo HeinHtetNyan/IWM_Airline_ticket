@@ -33,10 +33,9 @@ services:
     image: postgres:15-alpine
     container_name: air-postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: airticket
-      POSTGRES_PASSWORD: ChangeThisStrongPass789!
-      POSTGRES_DB: airticket_db
+    env_file:
+      - ../.env
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
