@@ -21,6 +21,21 @@ from backend.app.services.booking_auto_complete import auto_complete_bookings
 from backend.app.services.booking_deletion import auto_delete_expired_cancelled_bookings
 
 
+
+# PROMETHEUS IMPORTS 
+# ============================================
+from prometheus_fastapi_instrumentator import Instrumentator
+# Import custom metrics from separate file to avoid duplicates
+from backend.app.metrics import (
+    bookings_created_total,
+    searches_performed_total,
+    users_registered_total,
+    search_duration_seconds,
+    booking_duration_seconds,
+    active_users_gauge
+)
+
+
 # Logger
 logger = logging.getLogger(__name__)
 
@@ -149,6 +164,30 @@ app = FastAPI(
 )
 
 
+# PROMETHEUS METRICS SETUP -
+
+
+# Initialize Prometheus instrumentation
+# This automatically tracks all HTTP requests
+instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    should_respect_env_var=False,
+    should_instrument_requests_inprogress=True,  # Tracks active requests
+    excluded_handlers=["/metrics", "/api/health", "/health"],
+)
+
+# Attach metrics to app - ONLY ONCE!
+instrumentator.instrument(app).expose(
+    app, 
+    endpoint="/metrics", 
+    include_in_schema=False
+)
+
+print("✅ Prometheus metrics enabled")
+
+
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -166,3 +205,14 @@ app.include_router(api_router, prefix="/api")
 @app.get("/")
 def root():
     return {"message": settings.APP_ROOT_MESSAGE}
+
+
+@app.get("/api/health")
+def health_check():
+    """Health check for monitoring"""
+    return {
+        "status": "ok",
+        "timestamp": datetime.now().isoformat(),
+        "service": "airline-backend",
+        "version": "1.0.0"
+    }

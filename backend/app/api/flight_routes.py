@@ -1,5 +1,5 @@
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 import json
 
@@ -72,6 +72,10 @@ def search_flights(
     adults: int = Query(1, ge=1, le=50),
     db: Session = Depends(get_db),
 ):
+    
+    start_time = time.time()
+
+
     _enforce_search_rate_limit(request)
     _parse_date(departure_date, "departure_date", request)
 
@@ -108,6 +112,10 @@ def search_flights(
             logger.exception("Redis cache write failure")
 
     return apply_pricing_logic(db, api_flights, adults)
+
+# Record the metric
+    searches_performed_total.inc()
+    search_duration_seconds.observe(time.time() - start_time)
 
 
 @router.get("/search-round-trip")
