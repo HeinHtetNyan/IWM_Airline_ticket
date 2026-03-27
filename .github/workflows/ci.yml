@@ -1,0 +1,46 @@
+name: CI - Test My Code
+
+on:
+  push:
+    branches: [main, Bug_Fix_V1]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test Backend Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Get code from GitHub
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest
+      
+      - name: Run tests
+        run: |
+          cd backend
+          pytest tests/ -v
+        env:
+          DATABASE_URL: "sqlite:///./test.db"
+          SECRET_KEY: "test-secret-key"
+          REDIS_PASSWORD: "test-redis-pass"
+      
+      - name: Test Docker build
+        run: |
+          cd infra
+          docker build -f Dockerfile -t test-backend ..
+      
+      - name: Validate docker-compose
+        run: |
+          cd infra
+          docker-compose config
