@@ -1,0 +1,5 @@
+docker compose --env-file ../.env down -v  (remove volumes/ all database data will be lost)
+docker compose --env-file ../.env up -d --build (build)
+docker compose --env-file ../.env up -d
+docker compose --env-file ../.env logs -f (logs)
+docker compose --env-file ../.env ps (check status)
