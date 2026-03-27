@@ -60,18 +60,22 @@ def lifecycle_job():
             logger.info("[LIFECYCLE] Skipping run because another instance holds the job lock")
             return
 
-        cancel_result = auto_cancel_expired_bookings(db, expire_minutes=30)
+        cancel_result = auto_cancel_expired_bookings(
+            db,
+            expire_minutes=settings.BOOKING_AUTO_CANCEL_EXPIRE_MINUTES,
+        )
         complete_result = auto_complete_bookings(db)
         delete_result = auto_delete_expired_cancelled_bookings(
             db,
             delete_days=settings.CANCELLED_BOOKING_DELETE_DAYS,
         )
 
-        print(
-            f"[LIFECYCLE] {datetime.now(timezone.utc)} | "
-            f"Cancelled: {cancel_result['cancelled_count']} | "
-            f"Completed: {complete_result['completed']} | "
-            f"Deleted: {delete_result['deleted_count']}"
+        logger.info(
+            "[LIFECYCLE] %s | Cancelled: %s | Completed: %s | Deleted: %s",
+            datetime.now(timezone.utc),
+            cancel_result["cancelled_count"],
+            complete_result["completed"],
+            delete_result["deleted_count"],
         )
 
     except Exception:
@@ -93,16 +97,20 @@ def lifecycle_job():
 async def lifespan(_: FastAPI):
 
     # Wait for database
-    max_retries = 10
+    max_retries = settings.STARTUP_DB_MAX_RETRIES
     for attempt in range(max_retries):
         try:
             Base.metadata.create_all(bind=engine)
-            print("Database connected and tables created")
+            logger.info("Database connected and tables created")
             break
 
         except OperationalError:
-            print(f"Database not ready... retry {attempt + 1}/10")
-            time.sleep(2)
+            logger.warning(
+                "Database not ready... retry %s/%s",
+                attempt + 1,
+                max_retries,
+            )
+            time.sleep(settings.STARTUP_DB_RETRY_DELAY_SECONDS)
 
     else:
         raise RuntimeError("Could not connect to database")
@@ -112,13 +120,16 @@ async def lifespan(_: FastAPI):
         scheduler.add_job(
             lifecycle_job,
             "interval",
-            minutes=5,
+            minutes=settings.LIFECYCLE_JOB_INTERVAL_MINUTES,
             id="lifecycle_job",
             replace_existing=True,
         )
 
         scheduler.start()
-        print("Lifecycle scheduler started (every 5 minutes)")
+        logger.info(
+            "Lifecycle scheduler started (every %s minutes)",
+            settings.LIFECYCLE_JOB_INTERVAL_MINUTES,
+        )
 
     yield
 
@@ -129,9 +140,9 @@ async def lifespan(_: FastAPI):
 
 # FastAPI app
 app = FastAPI(
-    title="Air Ticket Booking API",
-    description="Backend API for flight search and booking system",
-    version="1.0.0",
+    title=settings.APP_NAME,
+    description=settings.APP_DESCRIPTION,
+    version=settings.APP_VERSION,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
@@ -154,4 +165,4 @@ app.include_router(api_router, prefix="/api")
 # Root endpoint
 @app.get("/")
 def root():
-    return {"message": "FastAPI running in Docker"}
+    return {"message": settings.APP_ROOT_MESSAGE}

@@ -1,16 +1,25 @@
 import json
+from urllib.parse import quote
 
 from pydantic import field_validator, model_validator
+from sqlalchemy.engine import URL
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Air Ticket Booking API"
+    APP_DESCRIPTION: str = "Backend API for flight search and booking system"
+    APP_VERSION: str = "1.0.0"
+    APP_ROOT_MESSAGE: str = "FastAPI running in Docker"
     ENVIRONMENT: str = "development"
 
     # Database
-    DATABASE_URL: str
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    POSTGRES_HOST: str = "db"
+    POSTGRES_PORT: int = 5432
 
     # Auth / JWT
     JWT_SECRET: str
@@ -25,9 +34,15 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_PASSWORD: str = ""
-    REDIS_URL: str
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
     FLIGHT_CACHE_TTL: int = 900
     TRUSTED_PROXY_CIDRS: str = "127.0.0.1/32,172.16.0.0/12"
+    BOOKING_AUTO_CANCEL_EXPIRE_MINUTES: int = 30
+    LIFECYCLE_JOB_INTERVAL_MINUTES: int = 5
+    STARTUP_DB_MAX_RETRIES: int = 10
+    STARTUP_DB_RETRY_DELAY_SECONDS: int = 2
 
     @field_validator("CORS_ALLOW_ORIGINS", mode="before")
     @classmethod
@@ -65,10 +80,7 @@ class Settings(BaseSettings):
         return cleaned
 
     @model_validator(mode="after")
-    def _expand_redis_url(self) -> "Settings":
-        if self.REDIS_PASSWORD:
-            self.REDIS_URL = self.REDIS_URL.replace("${REDIS_PASSWORD}", self.REDIS_PASSWORD)
-
+    def _validate_environment(self) -> "Settings":
         if self.ENVIRONMENT.lower() in {"production", "prod"} and "*" in self.cors_origins:
             raise ValueError("CORS wildcard '*' is not allowed when ENVIRONMENT=production")
 
@@ -77,6 +89,24 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return self._clean_origins(self.CORS_ALLOW_ORIGINS)
+
+    @property
+    def DATABASE_URL(self) -> str:
+        return URL.create(
+            drivername="postgresql+psycopg2",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_HOST,
+            port=self.POSTGRES_PORT,
+            database=self.POSTGRES_DB,
+        ).render_as_string(hide_password=False)
+
+    @property
+    def REDIS_URL(self) -> str:
+        auth = ""
+        if self.REDIS_PASSWORD:
+            auth = f":{quote(self.REDIS_PASSWORD, safe='')}@"
+        return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
 
     # DB Pool
     DB_POOL_SIZE: int = 20
