@@ -20,7 +20,7 @@ def test_health_check():
 
 def test_docs_available():
     """Test that API docs are accessible"""
-    response = client.get("/docs")
+    response = client.get("/api/docs") #need api prefix for docs
     assert response.status_code == 200
 
 def test_api_root():
