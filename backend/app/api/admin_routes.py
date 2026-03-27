@@ -14,11 +14,13 @@ from backend.app.auth.deps import (
 from backend.app.db.deps import get_db
 from backend.app.models.booking import Booking
 from backend.app.models.admin_user import AdminUser
+from backend.app.models.customer_user import CustomerUser
 from backend.app.schemas.common import ExchangeRateUpdate
 
 from backend.app.schemas.booking import (
     BookingStatusUpdate,
     BookingOut,
+    BookingUserOut,
     TicketUpload,
     PaymentStatusUpdate,
     AdminDashboard,
@@ -60,6 +62,15 @@ def _safe_load_flight_snapshot(flight_snapshot: str | None) -> dict:
         return json.loads(flight_snapshot)
     except (json.JSONDecodeError, TypeError):
         return {}
+
+
+def _serialize_booking_user(user: CustomerUser | None) -> BookingUserOut | None:
+    if not user or not user.email or not user.full_name:
+        return None
+    return BookingUserOut(
+        name=user.full_name,
+        email=user.email,
+    )
 
 # ADMIN IDENTITY
 @router.get("/me")
@@ -191,7 +202,10 @@ def list_all_bookings(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    query = db.query(Booking)
+    query = (
+        db.query(Booking, CustomerUser)
+        .outerjoin(CustomerUser, Booking.customer_id == CustomerUser.id)
+    )
 
     if status:
         if status not in VALID_BOOKING_STATUSES:
@@ -202,20 +216,21 @@ def list_all_bookings(
 
     return [
         BookingOut(
-            booking_id=b.id,
-            booking_code=b.booking_code,
-            type=b.type,
-            adults=b.adults,
-            bundle_key=b.bundle_key,
-            flight_snapshot=_safe_load_flight_snapshot(b.flight_snapshot),
-            final_price_usd=b.final_price_usd,
-            final_price_mmk=b.final_price_mmk,
-            status=b.status,
-            payment_status=b.payment_status,
-            created_at=b.created_at,
+            booking_id=booking.id,
+            booking_code=booking.booking_code,
+            type=booking.type,
+            adults=booking.adults,
+            bundle_key=booking.bundle_key,
+            flight_snapshot=_safe_load_flight_snapshot(booking.flight_snapshot),
+            final_price_usd=booking.final_price_usd,
+            final_price_mmk=booking.final_price_mmk,
+            status=booking.status,
+            payment_status=booking.payment_status,
+            created_at=booking.created_at,
             passengers=None,
+            user=_serialize_booking_user(user),
         )
-        for b in bookings
+        for booking, user in bookings
     ]
 
 
@@ -236,10 +251,16 @@ def get_booking_detail(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    booking_row = (
+        db.query(Booking, CustomerUser)
+        .outerjoin(CustomerUser, Booking.customer_id == CustomerUser.id)
+        .filter(Booking.id == booking_id)
+        .first()
+    )
 
-    if not booking:
+    if not booking_row:
         raise HTTPException(status_code=404, detail="Booking not found")
+    booking, user = booking_row
 
     return BookingOut(
         booking_id=booking.id,
@@ -256,6 +277,7 @@ def get_booking_detail(
         passengers=booking.passengers,
         outbound_completed=booking.outbound_completed,
         inbound_completed=booking.inbound_completed,
+        user=_serialize_booking_user(user),
     )
 
 

@@ -55,8 +55,13 @@ class BookingBaseOut(BaseModel):
         from_attributes = True
 
 
+class BookingUserOut(BaseModel):
+    name: str
+    email: str
+
+
 class BookingOut(BookingBaseOut):
-    pass
+    user: Optional[BookingUserOut] = None
 
 
 class CustomerBookingOut(BookingBaseOut):

@@ -22,18 +22,21 @@ from backend.app.services.booking_deletion import auto_delete_expired_cancelled_
 
 
 
-# PROMETHEUS IMPORTS 
+# PROMETHEUS IMPORTS
 # ============================================
-from prometheus_fastapi_instrumentator import Instrumentator
-# Import custom metrics from separate file to avoid duplicates
-from backend.app.metrics import (
-    bookings_created_total,
-    searches_performed_total,
-    users_registered_total,
-    search_duration_seconds,
-    booking_duration_seconds,
-    active_users_gauge
-)
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    # Import custom metrics from separate file to avoid duplicates
+    from backend.app.metrics import (
+        bookings_created_total,
+        searches_performed_total,
+        users_registered_total,
+        search_duration_seconds,
+        booking_duration_seconds,
+        active_users_gauge,
+    )
+except ImportError:
+    Instrumentator = None
 
 
 # Logger
@@ -165,24 +168,28 @@ app = FastAPI(
 
 
 # PROMETHEUS METRICS SETUP -
+if Instrumentator is not None:
+    # Initialize Prometheus instrumentation
+    # This automatically tracks all HTTP requests
+    instrumentator = Instrumentator(
+        should_group_status_codes=False,
+        should_ignore_untemplated=True,
+        should_respect_env_var=False,
+        should_instrument_requests_inprogress=True,  # Tracks active requests
+        excluded_handlers=["/metrics", "/api/health", "/health"],
+    )
 
-
-# Initialize Prometheus instrumentation
-# This automatically tracks all HTTP requests
-instrumentator = Instrumentator(
-    should_group_status_codes=False,
-    should_ignore_untemplated=True,
-    should_respect_env_var=False,
-    should_instrument_requests_inprogress=True,  # Tracks active requests
-    excluded_handlers=["/metrics", "/api/health", "/health"],
-)
-
-# Attach metrics to app - ONLY ONCE!
-instrumentator.instrument(app).expose(
-    app, 
-    endpoint="/metrics", 
-    include_in_schema=False
-)
+    # Attach metrics to app - ONLY ONCE!
+    instrumentator.instrument(app).expose(
+        app,
+        endpoint="/metrics",
+        include_in_schema=False,
+    )
+    logger.info("Prometheus metrics enabled")
+else:
+    logger.warning(
+        "Prometheus instrumentation package is not installed; continuing without /metrics exposure"
+    )
 
 print("✅ Prometheus metrics enabled")
 
