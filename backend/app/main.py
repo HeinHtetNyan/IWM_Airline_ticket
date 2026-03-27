@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
 
-from app.api.router import api_router
+from backend.app.api.router import api_router
 from backend.app.db.base import Base
 from backend.app.db.session import SessionLocal, engine
 from backend.app.core.config import settings
