@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.models.admin_user import AdminUser
 from backend.app.auth.security import get_password_hash, verify_password
@@ -26,7 +27,11 @@ def create_admin(
         is_active=True,
     )
     db.add(admin)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Email already registered")
     db.refresh(admin)
     return admin
 

@@ -1,6 +1,7 @@
 from .admin_user import AdminUser
 from .airport import Airport
 from .booking import Booking
+from .booking_deletion_log import BookingDeletionLog
 from .booking_passenger import BookingPassenger
 from .customer_contact import CustomerContact
 from .customer_user import CustomerUser
@@ -11,6 +12,7 @@ __all__ = [
     "AdminUser",
     "Airport",
     "Booking",
+    "BookingDeletionLog",
     "BookingPassenger",
     "CustomerContact",
     "CustomerUser",

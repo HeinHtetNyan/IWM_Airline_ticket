@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from fastapi import HTTPException
 from uuid import UUID
 
 from backend.app.models.admin_user import AdminUser
@@ -38,6 +40,9 @@ def get_staff(db: Session, staff_id: UUID):
 
 
 def update_staff(db: Session, staff: AdminUser, data: dict):
+    if "email" in data and data["email"] is not None:
+        data["email"] = str(data["email"]).strip().lower()
+
     if "password" in data:
         data["password_hash"] = get_password_hash(data.pop("password"))
 
@@ -47,7 +52,11 @@ def update_staff(db: Session, staff: AdminUser, data: dict):
 
         setattr(staff, key, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Email already registered")
     db.refresh(staff)
     return staff
 

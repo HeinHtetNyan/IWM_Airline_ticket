@@ -43,6 +43,7 @@ from backend.app.crud.flight_override import (
 from backend.app.models.exchange_rate import ExchangeRate
 
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
+from backend.app.services.booking_deletion import delete_cancelled_booking_by_admin
 from backend.app.schemas.staff import StaffResponse, StaffUpdate
 from backend.app.schemas.customer_user import CustomerUserResponse, CustomerUserUpdate
 from backend.app.crud import staff as staff_crud
@@ -246,7 +247,7 @@ def get_booking_detail(
         type=booking.type,
         adults=booking.adults,
         bundle_key=booking.bundle_key,
-        flight_snapshot=json.loads(booking.flight_snapshot),
+        flight_snapshot=_safe_load_flight_snapshot(booking.flight_snapshot),
         final_price_usd=booking.final_price_usd,
         final_price_mmk=booking.final_price_mmk,
         status=booking.status,
@@ -255,6 +256,19 @@ def get_booking_detail(
         passengers=booking.passengers,
         outbound_completed=booking.outbound_completed,
         inbound_completed=booking.inbound_completed,
+    )
+
+
+@router.delete("/bookings/{booking_id}")
+def delete_booking(
+    booking_id: UUID,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_admin),
+):
+    return delete_cancelled_booking_by_admin(
+        db=db,
+        booking_id=booking_id,
+        admin=admin,
     )
 
 
