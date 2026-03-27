@@ -91,6 +91,8 @@ def create_booking(
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
 ):
+    start_time = time.time()
+
     snapshot = _validate_snapshot(payload)
     snapshot.setdefault("airline_code", payload.airline_code)
     snapshot.setdefault("flight_number", payload.flight_number)
@@ -136,6 +138,11 @@ def create_booking(
     db.add(booking)
     db.commit()
     db.refresh(booking)
+
+    # Record booking metrics
+    bookings_created_total.inc()
+    booking_duration_seconds.observe(time.time() - start_time)
+    
 
     return CustomerBookingOut(
         booking_id=booking.id,
