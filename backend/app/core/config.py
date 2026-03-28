@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     APP_ROOT_MESSAGE: str = "FastAPI running in Docker"
     ENVIRONMENT: str = "development"
+    BASE_URL: str = "http://localhost:8000"
 
     # Database
     POSTGRES_USER: str
@@ -43,6 +44,15 @@ class Settings(BaseSettings):
     LIFECYCLE_JOB_INTERVAL_MINUTES: int = 5
     STARTUP_DB_MAX_RETRIES: int = 10
     STARTUP_DB_RETRY_DELAY_SECONDS: int = 2
+
+    # File storage
+    STORAGE_TYPE: str = "local"
+    UPLOAD_DIR: str = "/app/uploads"
+    S3_BUCKET: str = ""
+    S3_REGION: str = "ap-southeast-1"
+    S3_ACCESS_KEY: str = ""
+    S3_SECRET_KEY: str = ""
+    S3_BASE_URL: str = ""
 
     @field_validator("CORS_ALLOW_ORIGINS", mode="before")
     @classmethod

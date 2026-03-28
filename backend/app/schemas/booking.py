@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, Field, constr
+from pydantic import BaseModel, Field, constr
 
 from backend.app.schemas.passenger import PassengerOut
 
@@ -70,10 +70,6 @@ class CustomerBookingOut(BookingBaseOut):
 
 class BookingStatusUpdate(BaseModel):
     status: BookingStatus
-
-
-class TicketUpload(BaseModel):
-    ticket_file_url: AnyHttpUrl
 
 
 class PaymentStatusUpdate(BaseModel):

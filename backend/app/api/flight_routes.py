@@ -1,7 +1,8 @@
 import logging
-from datetime import date, datetime, time
-from zoneinfo import ZoneInfo
 import json
+import time
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from backend.app.core.rate_limit import enforce_rate_limit
 from backend.app.db.deps import get_db
 from backend.app.core.redis import redis_client
 from backend.app.core.config import settings
+from backend.app.metrics import searches_performed_total, search_duration_seconds
 from backend.app.services.external_flight_api import (
     fetch_flights_from_external_api,
     fetch_round_trip_from_external_api,
@@ -111,11 +113,10 @@ def search_flights(
         except Exception:
             logger.exception("Redis cache write failure")
 
-    return apply_pricing_logic(db, api_flights, adults)
-
-# Record the metric
     searches_performed_total.inc()
     search_duration_seconds.observe(time.time() - start_time)
+
+    return apply_pricing_logic(db, api_flights, adults)
 
 
 @router.get("/search-round-trip")

@@ -15,6 +15,7 @@ services:
       - "${BACKEND_PORT:-8000}"
     volumes:
       - ../:/app:ro
+      - ../uploads:/app/uploads
     healthcheck:
       test:
         [

@@ -2,6 +2,7 @@ import time
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -165,6 +166,9 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
+
+if settings.STORAGE_TYPE.lower() == "local":
+    Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 
 
 # PROMETHEUS METRICS SETUP -

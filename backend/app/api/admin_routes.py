@@ -1,13 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import os
+import mimetypes
+from pathlib import Path
+from urllib.parse import parse_qs, quote, urlparse
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from uuid import UUID
+from uuid import UUID, uuid4
 import json
 from typing import Optional
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from backend.app.auth.deps import (
+    _decode_or_401,
+    optional_security,
     require_admin,
     require_super_admin,
 )
@@ -21,7 +30,6 @@ from backend.app.schemas.booking import (
     BookingStatusUpdate,
     BookingOut,
     BookingUserOut,
-    TicketUpload,
     PaymentStatusUpdate,
     AdminDashboard,
     DashboardFinancial,
@@ -46,6 +54,8 @@ from backend.app.models.exchange_rate import ExchangeRate
 
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from backend.app.services.booking_deletion import delete_cancelled_booking_by_admin
+from backend.app.services.storage_service import get_storage
+from backend.app.core.config import settings
 from backend.app.schemas.staff import StaffResponse, StaffUpdate
 from backend.app.schemas.customer_user import CustomerUserResponse, CustomerUserUpdate
 from backend.app.crud import staff as staff_crud
@@ -54,7 +64,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+files_router = APIRouter(prefix="/files", tags=["files"])
+secure_router = APIRouter(prefix="/secure", tags=["files"])
 VALID_BOOKING_STATUSES = {"PROCESSING", "CONFIRMED", "COMPLETED", "CANCELLED"}
+ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "application/pdf"}
+MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 
 def _safe_load_flight_snapshot(flight_snapshot: str | None) -> dict:
@@ -71,6 +85,98 @@ def _serialize_booking_user(user: CustomerUser | None) -> BookingUserOut | None:
         name=user.full_name,
         email=user.email,
     )
+
+
+def _detect_folder_from_content_type(content_type: str | None, *, is_booking: bool = False) -> str:
+    if content_type in {"image/jpeg", "image/png"}:
+        return "private/images"
+    if content_type == "application/pdf" or is_booking:
+        return "private/tickets"
+    raise HTTPException(status_code=400, detail="Invalid file type")
+
+
+def _generate_uuid_filename(original_name: str | None) -> str:
+    extension = ""
+    if original_name and "." in original_name:
+        extension = f".{original_name.rsplit('.', 1)[-1].lower()}"
+    return f"{uuid4().hex}{extension}"
+
+
+async def _validate_upload_file(file: UploadFile) -> None:
+    if file.content_type not in ALLOWED_UPLOAD_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+
+    await file.seek(0)
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    await file.seek(0)
+
+    if file_size > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="File too large")
+
+
+def _extract_storage_path(file_url: str | None) -> str | None:
+    if not file_url:
+        return None
+
+    parsed = urlparse(file_url)
+    query_path = parse_qs(parsed.query).get("path", [None])[0]
+    if query_path:
+        return query_path
+
+    s3_base_url = settings.S3_BASE_URL.rstrip("/")
+    if s3_base_url and file_url.startswith(f"{s3_base_url}/"):
+        return file_url.removeprefix(f"{s3_base_url}/")
+
+    return parsed.path.lstrip("/") or None
+
+
+def _build_private_ticket_url(booking_id: UUID, path: str) -> str:
+    encoded_path = quote(path, safe="/")
+    return f"{settings.BASE_URL.rstrip('/')}/api/secure/tickets/{booking_id}?path={encoded_path}"
+
+
+def _get_request_actor(
+    credentials: HTTPAuthorizationCredentials = Depends(optional_security),
+    db: Session = Depends(get_db),
+) -> CustomerUser | AdminUser:
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    payload = _decode_or_401(credentials.credentials)
+    subject = payload.get("sub")
+    role = payload.get("role")
+
+    if not subject:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if role == "CUSTOMER":
+        customer = db.query(CustomerUser).filter(CustomerUser.id == subject).first()
+        if not customer or not customer.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+        return customer
+
+    if role in {"STAFF", "SUPER_ADMIN"}:
+        admin = db.query(AdminUser).filter(AdminUser.id == subject).first()
+        if not admin or not admin.is_active:
+            raise HTTPException(status_code=401, detail="Admin not found or inactive")
+        return admin
+
+    raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def _get_booking_file_record(db: Session, file_id: UUID) -> Booking:
+    booking = db.query(Booking).filter(Booking.id == file_id).first()
+    if not booking or not booking.ticket_file_url:
+        raise HTTPException(status_code=404, detail="File not found")
+    return booking
+
+
+def _ensure_booking_file_access(booking: Booking, actor: CustomerUser | AdminUser) -> None:
+    if isinstance(actor, AdminUser):
+        return
+    if booking.customer_id != actor.id:
+        raise HTTPException(status_code=403, detail="Unauthorized access")
 
 # ADMIN IDENTITY
 @router.get("/me")
@@ -410,9 +516,9 @@ def update_booking_status(
 
 # UPLOAD TICKET
 @router.put("/bookings/{booking_id}/upload-ticket")
-def upload_ticket(
+async def upload_ticket(
     booking_id: UUID,
-    payload: TicketUpload,
+    file: UploadFile = File(...),
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
@@ -439,7 +545,22 @@ def upload_ticket(
             detail="Ticket already uploaded"
         )
 
-    booking.ticket_file_url = str(payload.ticket_file_url)
+    await _validate_upload_file(file)
+
+    storage = get_storage()
+    folder = _detect_folder_from_content_type(file.content_type, is_booking=True)
+    path = f"{folder}/{_generate_uuid_filename(file.filename)}"
+    try:
+        await storage.save(file, path)
+    except Exception as exc:
+        logger.exception("Ticket upload failed for booking %s", booking_id)
+        raise HTTPException(status_code=500, detail="Storage failure") from exc
+
+    file_url = _build_private_ticket_url(booking.id, path)
+
+    # Files are not stored in the DB as base64/blob content because object
+    # storage and filesystem backends scale better, while the DB keeps metadata.
+    booking.ticket_file_url = file_url
     booking.ticket_uploaded_at = datetime.now(ZoneInfo("UTC"))
     booking.ticket_uploaded_by_admin_id = admin.id
 
@@ -457,6 +578,9 @@ def upload_ticket(
         "ticket_uploaded_at": booking.ticket_uploaded_at,
         "status": booking.status,
         "uploaded_by": admin.email,
+        "file_url": booking.ticket_file_url,
+        "file_type": file.content_type,
+        "original_name": file.filename,
     }
 
 
@@ -504,6 +628,118 @@ def get_booking_audit(
             "uploaded_at": booking.ticket_uploaded_at,
             "uploaded_by": get_admin_info(booking.ticket_uploaded_by_admin_id),
         },
+    }
+
+
+@files_router.put("/replace/{file_id}")
+async def replace_file(
+    file_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_admin),
+):
+    booking = _get_booking_file_record(db, file_id)
+    await _validate_upload_file(file)
+
+    storage = get_storage()
+    old_path = _extract_storage_path(booking.ticket_file_url)
+
+    folder = _detect_folder_from_content_type(file.content_type, is_booking=True)
+    new_path = f"{folder}/{_generate_uuid_filename(file.filename)}"
+    try:
+        await storage.save(file, new_path)
+    except Exception as exc:
+        logger.exception("Ticket replacement upload failed for booking %s", file_id)
+        raise HTTPException(status_code=500, detail="Storage failure") from exc
+
+    booking.ticket_file_url = _build_private_ticket_url(booking.id, new_path)
+    booking.ticket_uploaded_at = datetime.now(ZoneInfo("UTC"))
+    booking.ticket_uploaded_by_admin_id = admin.id
+
+    db.commit()
+    db.refresh(booking)
+
+    # Delete the old file only after the new upload and DB update succeed so a
+    # failed replacement never leaves the booking without a ticket.
+    if old_path:
+        try:
+            await storage.delete(old_path)
+        except Exception:
+            logger.exception("Old ticket cleanup failed for booking %s", file_id)
+
+    return {
+        "file_id": booking.id,
+        "file_url": booking.ticket_file_url,
+        "file_type": file.content_type,
+        "original_name": file.filename,
+        "updated_by": admin.email,
+    }
+
+
+@secure_router.get("/tickets/{booking_id}")
+async def get_secure_ticket(
+    booking_id: UUID,
+    actor: CustomerUser | AdminUser = Depends(_get_request_actor),
+    db: Session = Depends(get_db),
+):
+    booking = _get_booking_file_record(db, booking_id)
+    _ensure_booking_file_access(booking, actor)
+
+    ticket_path = _extract_storage_path(booking.ticket_file_url)
+    if not ticket_path:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    storage = get_storage()
+
+    if settings.STORAGE_TYPE.lower() == "s3":
+        try:
+            signed_url = await storage.generate_presigned_url(ticket_path, expires=300)
+        except Exception as exc:
+            logger.exception("Signed URL generation failed for booking %s", booking_id)
+            raise HTTPException(status_code=500, detail="Storage failure") from exc
+        return RedirectResponse(url=signed_url, status_code=307)
+
+    local_path = Path(settings.UPLOAD_DIR) / ticket_path
+    if not local_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    # Private ticket files are served through an authenticated endpoint instead
+    # of the public static mount so browsers cannot fetch them anonymously.
+    guessed_media_type, _ = mimetypes.guess_type(local_path.name)
+    return FileResponse(
+        path=local_path,
+        media_type=guessed_media_type or "application/octet-stream",
+        filename=local_path.name,
+    )
+
+
+@files_router.delete("/{file_id}")
+async def delete_file(
+    file_id: UUID,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_admin),
+):
+    booking = _get_booking_file_record(db, file_id)
+    storage = get_storage()
+
+    old_path = _extract_storage_path(booking.ticket_file_url)
+    if old_path:
+        try:
+            await storage.delete(old_path)
+        except Exception as exc:
+            logger.exception("Ticket deletion failed for booking %s", file_id)
+            raise HTTPException(status_code=500, detail="Storage failure") from exc
+
+    booking.ticket_file_url = None
+    booking.ticket_uploaded_at = None
+    booking.ticket_uploaded_by_admin_id = None
+
+    db.commit()
+
+    return {
+        "file_id": booking.id,
+        "deleted": True,
+        "deleted_by": admin.email,
     }
 # EXCHANGE RATE (ADMIN CONFIG)
 @router.get("/exchange-rate")

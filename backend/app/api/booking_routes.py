@@ -1,5 +1,6 @@
 import json
-from datetime import datetime, time, timedelta, timezone
+import time
+from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
 
@@ -14,6 +15,7 @@ from backend.app.models.booking_passenger import BookingPassenger as Passenger
 from backend.app.models.customer_user import CustomerUser
 from backend.app.schemas.booking import BookingCreate, CustomerBookingOut
 from backend.app.schemas.passenger import PassengerBulkCreate, PassengerOut
+from backend.app.metrics import bookings_created_total, booking_duration_seconds
 from backend.app.services.pricing_engine import calculate_booking_totals
 
 router = APIRouter(prefix="/bookings", tags=["bookings"])
