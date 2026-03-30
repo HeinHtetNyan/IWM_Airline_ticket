@@ -631,14 +631,14 @@ def get_booking_audit(
     }
 
 
-@files_router.put("/replace/{file_id}")
+@files_router.put("/replace/{booking_id}")
 async def replace_file(
-    file_id: UUID,
+    booking_id: UUID,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    booking = _get_booking_file_record(db, file_id)
+    booking = _get_booking_file_record(db, booking_id)
     await _validate_upload_file(file)
 
     storage = get_storage()
@@ -649,7 +649,7 @@ async def replace_file(
     try:
         await storage.save(file, new_path)
     except Exception as exc:
-        logger.exception("Ticket replacement upload failed for booking %s", file_id)
+        logger.exception("Ticket replacement upload failed for booking %s", booking_id)
         raise HTTPException(status_code=500, detail="Storage failure") from exc
 
     booking.ticket_file_url = _build_private_ticket_url(booking.id, new_path)
@@ -665,7 +665,7 @@ async def replace_file(
         try:
             await storage.delete(old_path)
         except Exception:
-            logger.exception("Old ticket cleanup failed for booking %s", file_id)
+            logger.exception("Old ticket cleanup failed for booking %s", booking_id)
 
     return {
         "file_id": booking.id,
@@ -713,13 +713,13 @@ async def get_secure_ticket(
     )
 
 
-@files_router.delete("/{file_id}")
+@files_router.delete("/{booking_id}")
 async def delete_file(
-    file_id: UUID,
+    booking_id: UUID,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    booking = _get_booking_file_record(db, file_id)
+    booking = _get_booking_file_record(db, booking_id)
     storage = get_storage()
 
     old_path = _extract_storage_path(booking.ticket_file_url)
@@ -727,7 +727,7 @@ async def delete_file(
         try:
             await storage.delete(old_path)
         except Exception as exc:
-            logger.exception("Ticket deletion failed for booking %s", file_id)
+            logger.exception("Ticket deletion failed for booking %s", booking_id)
             raise HTTPException(status_code=500, detail="Storage failure") from exc
 
     booking.ticket_file_url = None

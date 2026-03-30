@@ -28,5 +28,8 @@ frontend/build/
 .DS_Store
 Thumbs.db
 
+#ticket files
+uploads/
+
 # Keep example file
 !.env.example
