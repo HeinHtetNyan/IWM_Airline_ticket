@@ -29,12 +29,16 @@ def get_current_customer(
     user_id = payload.get("sub")
     role = payload.get("role")
 
-    if not user_id or role != "CUSTOMER":
-        raise HTTPException(status_code=401, detail="Invalid customer token")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if role != "CUSTOMER":
+        raise HTTPException(status_code=403, detail="Customer access required")
 
     user = db.query(CustomerUser).filter(CustomerUser.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found or inactive")
+    if not user.is_email_verified:
+        raise HTTPException(status_code=403, detail="Email not verified")
     return user
 
 

@@ -37,19 +37,6 @@ from backend.app.schemas.booking import (
     DashboardToday,
 )
 
-from backend.app.schemas.flight_override import (
-    FlightOverrideCreate,
-    FlightOverrideResponse,
-    FlightOverrideUpdate
-)
-
-from backend.app.crud.flight_override import (
-    create_override,
-    get_all_overrides,
-    update_override_price,
-    delete_override
-)
-
 from backend.app.models.exchange_rate import ExchangeRate
 
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
@@ -69,6 +56,11 @@ secure_router = APIRouter(prefix="/secure", tags=["files"])
 VALID_BOOKING_STATUSES = {"PROCESSING", "CONFIRMED", "COMPLETED", "CANCELLED"}
 ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "application/pdf"}
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
+FILE_SIGNATURES = {
+    "application/pdf": [b"%PDF-"],
+    "image/png": [b"\x89PNG\r\n\x1a\n"],
+    "image/jpeg": [b"\xff\xd8\xff"],
+}
 
 
 def _safe_load_flight_snapshot(flight_snapshot: str | None) -> dict:
@@ -113,6 +105,13 @@ async def _validate_upload_file(file: UploadFile) -> None:
 
     if file_size > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=400, detail="File too large")
+
+    header = await file.read(16)
+    await file.seek(0)
+
+    expected_signatures = FILE_SIGNATURES.get(file.content_type or "")
+    if not expected_signatures or not any(header.startswith(signature) for signature in expected_signatures):
+        raise HTTPException(status_code=400, detail="File content does not match the declared file type")
 
 
 def _extract_storage_path(file_url: str | None) -> str | None:
@@ -259,44 +258,6 @@ def admin_dashboard(
             revenue_today_mmk=revenue_today[1],
         ),
     )
-
-
-# FLIGHT OVERRIDES (SUPER ADMIN ONLY)
-@router.post("/overrides", response_model=FlightOverrideResponse)
-def create_flight_override(
-    override: FlightOverrideCreate,
-    db: Session = Depends(get_db),
-    admin: AdminUser = Depends(require_super_admin),
-):
-    return create_override(db, override)
-
-
-@router.get("/overrides", response_model=list[FlightOverrideResponse])
-def list_flight_overrides(
-    db: Session = Depends(get_db),
-    admin: AdminUser = Depends(require_super_admin),
-):
-    return get_all_overrides(db)
-
-
-@router.put("/overrides/{override_id}", response_model=FlightOverrideResponse)
-def update_flight_override(
-    override_id: str,
-    payload: FlightOverrideUpdate,
-    db: Session = Depends(get_db),
-    admin: AdminUser = Depends(require_super_admin),
-):
-    return update_override_price(db, override_id, payload.override_price_usd)
-
-
-@router.delete("/overrides/{override_id}")
-def delete_flight_override(
-    override_id: str,
-    db: Session = Depends(get_db),
-    admin: AdminUser = Depends(require_super_admin),
-):
-    delete_override(db, override_id)
-    return {"message": "Override deleted successfully"}
 
 
 # ADMIN BOOKING LIST

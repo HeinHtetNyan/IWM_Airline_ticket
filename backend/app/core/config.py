@@ -26,6 +26,27 @@ class Settings(BaseSettings):
     JWT_SECRET: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    TOKEN_EXPIRE_MINUTES_RESET: int = 30
+    TOKEN_EXPIRE_MINUTES_VERIFY: int = 1440
+
+    # Email
+    EMAIL_ENABLED: bool = True
+    EMAIL_HOST: str = "smtp.example.com"
+    EMAIL_PORT: int = 587
+    EMAIL_USERNAME: str = ""
+    EMAIL_PASSWORD: str = ""
+    EMAIL_FROM: str = ""
+    EMAIL_FROM_NAME: str = ""
+    EMAIL_USE_TLS: bool = True
+    EMAIL_USE_SSL: bool = False
+    EMAIL_REQUIRE_AUTH: bool = True
+    EMAIL_TIMEOUT_SECONDS: int = 30
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+
+    # Auth rate limiting
+    RATE_LIMIT_FORGOT_PASSWORD: int = 5
+    RATE_LIMIT_RESEND_EMAIL: int = 5
+    RATE_LIMIT_WINDOW_SECONDS: int = 3600
 
     # CORS
     CORS_ALLOW_ORIGINS: list[str] | str = []
