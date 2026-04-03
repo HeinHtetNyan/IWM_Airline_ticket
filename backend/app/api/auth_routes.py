@@ -39,7 +39,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 # CUSTOMER
-@router.post("/customer/signup", response_model=TokenOut, status_code=201)
+@router.post("/customer/signup", response_model=Message, status_code=201)
 def customer_signup(
     payload: CustomerSignupIn,
     background_tasks: BackgroundTasks,
@@ -77,17 +77,7 @@ def customer_signup(
     verification_token = create_email_verification_token(db, user_id=user.id)
     background_tasks.add_task(send_verification_email, user.email, verification_token)
 
-    token = create_access_token(subject=str(user.id), role="CUSTOMER")
-    return TokenOut(
-        access_token=token,
-        user={
-            "id": str(user.id),
-            "email": user.email,
-            "full_name": user.full_name,
-            "phone": user.phone,
-            "is_email_verified": user.is_email_verified,
-        },
-    )
+    return Message(message="Signup successful. Please check your email to verify your account.")
 
 
 @router.post("/customer/login", response_model=TokenOut)

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -269,10 +269,17 @@ def add_passengers(
 
 @router.get("/me", response_model=List[CustomerBookingOut])
 def list_my_bookings(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
 ):
-    bookings = db.query(Booking).filter(Booking.customer_id == current_user.id).order_by(Booking.created_at.desc()).all()
+    bookings = (
+        db.query(Booking)
+        .filter(Booking.customer_id == current_user.id)
+        .order_by(Booking.created_at.desc())
+        .offset(offset).limit(limit).all()
+    )
 
     return [
         CustomerBookingOut(
