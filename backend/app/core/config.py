@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     JWT_SECRET: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    TOKEN_EXPIRE_MINUTES_RESET: int = 30
-    TOKEN_EXPIRE_MINUTES_VERIFY: int = 1440
+    TOKEN_EXPIRE_MINUTES_RESET: int = 15
+    TOKEN_EXPIRE_MINUTES_VERIFY: int = 15
 
     # Email
     EMAIL_ENABLED: bool = True

@@ -175,6 +175,7 @@ def verify_email(
 
     user.is_email_verified = True
     db.add(user)
+    db.commit()
     mark_token_used(db, token_record)
     return Message(message="Email verified successfully")
 
@@ -235,6 +236,7 @@ def reset_password(
 
     user.password_hash = get_password_hash(payload.new_password)
     db.add(user)
+    db.commit()
     mark_token_used(db, token_record)
     return Message(message="Password reset successfully")
 
