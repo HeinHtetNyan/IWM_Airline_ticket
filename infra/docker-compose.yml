@@ -31,6 +31,7 @@ services:
     networks:
       - app_network
       - monitoring_network
+      #- mail_network #uncomment when using local mailpit SMTP server
 
   db:
     image: postgres:15-alpine
@@ -112,7 +113,7 @@ services:
     container_name: air-grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3003:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
@@ -141,3 +142,6 @@ networks:
     driver: bridge
   monitoring_network:
     driver: bridge
+  #mail_network:
+  #  external: true
+  #  name: mail_network
