@@ -1,4 +1,4 @@
-name: CI - Test My Code
+name: CI - Test, Lint & Security
 
 on:
   push:
@@ -8,59 +8,146 @@ on:
 
 jobs:
   test:
-    name: Test Backend Code
+    name: Test & Lint
     runs-on: ubuntu-latest
-    
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
-      - name: Get code from GitHub
+      - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
       - name: Install dependencies
         run: |
           cd backend
           pip install -r requirements.txt
-          pip install pytest
-      
-      - name: Run tests
+          pip install pytest pytest-cov flake8 black bandit
+
+      - name: Lint with flake8
         run: |
           cd backend
-          pytest tests/ -v
+          flake8 app --count --max-complexity=10 --statistics
+
+      - name: Check formatting with black
+        run: |
+          cd backend
+          black --check app
+
+      - name: Security scan with bandit
+        run: |
+          cd backend
+          bandit -r app -f json -o bandit-report.json || true
+        continue-on-error: true
+
+      - name: Run tests with coverage
+        run: |
+          cd backend
+          pytest tests/ -v --cov=app --cov-report=xml
         env:
           ENVIRONMENT: test
-          APP_NAME: Test App
-
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test_db
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
-
-          REDIS_PASSWORD: ""
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-          REDIS_DB: 0
-
-          JWT_SECRET: test-secret-key
+          REDIS_PASSWORD: ""
+          JWT_SECRET: ${{ secrets.JWT_SECRET_TEST }}
           ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_MINUTES: 60
-
           CANCELLED_BOOKING_DELETE_DAYS: 7
           CORS_ALLOW_ORIGINS: http://localhost:3000
-
           FLIGHT_CACHE_TTL: 900
           TRUSTED_PROXY_CIDRS: 127.0.0.1/32
-      
-      - name: Test Docker build
+
+      - name: Upload coverage to Codecov (optional)
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./backend/coverage.xml
+          fail_ci_if_error: false
+
+  docker-build:
+    name: Build & Scan Docker Image
+    runs-on: ubuntu-latest
+    needs: test  # only run if tests pass
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./infra/Dockerfile
+          load: true
+          tags: airline-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: airline-backend:ci
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # Optional: Push to registry if on main
+      - name: Push to Docker Hub
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push image
+        if: github.ref == 'refs/heads/main'
         run: |
-          cd infra
-          docker build -f Dockerfile -t test-backend ..
-      
-      - name: Validate docker-compose
-        run: |
-          cd infra
-          docker compose config
+          docker tag airline-backend:ci ${{ secrets.DOCKER_USERNAME }}/airline-backend:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/airline-backend:latest

@@ -6,6 +6,18 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - JWT_SECRET=${JWT_SECRET}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      - CANCELLED_BOOKING_DELETE_DAYS=${CANCELLED_BOOKING_DELETE_DAYS:-7}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-http://localhost:3000}
+      - FLIGHT_CACHE_TTL=${FLIGHT_CACHE_TTL:-900}
+      - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32}
+      - STORAGE_TYPE=${STORAGE_TYPE:-local}
+      - UPLOAD_DIR=${UPLOAD_DIR:-/app/uploads}
+      - PYTHONPATH=/app 
     depends_on:
       db:
         condition: service_healthy
@@ -14,8 +26,14 @@ services:
     expose:
       - "${BACKEND_PORT:-8000}"
     volumes:
-      - ../:/app:ro
-      - ../uploads:/app/uploads
+      # Mount your local backend code into the container at /app/backend
+      - ../backend:/app/backend:ro
+      # Mount tests so they can be executed inside the container
+      - ../backend/tests:/app/backend/tests:ro
+      # Use a named volume for uploads (avoid Windows bind‑mount issues)
+      - uploads_data:/app/uploads
+    working_dir: /app
+    command: ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "${BACKEND_PORT:-8000}"]
     healthcheck:
       test:
         [
@@ -87,8 +105,6 @@ services:
     networks:
       - app_network
 
-  # MONITORING SERVICES
-  # ============================================
   prometheus:
     image: prom/prometheus:latest
     container_name: air-prometheus
@@ -126,16 +142,45 @@ services:
     networks:
       - monitoring_network
 
+  test_runner:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    container_name: airline-test-runner
+    profiles:
+      - test
+    env_file:
+      - ../.env.test
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - ENVIRONMENT=test
+      - POSTGRES_HOST=db
+      - REDIS_HOST=redis
+      - JWT_SECRET=test-secret-key-do-not-use-in-production
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+    volumes:
+      - ../backend:/app/backend:ro
+      - ../backend/tests:/app/backend/tests:ro
+      - test_results:/app/test_results
+    working_dir: /app
+    command: ["pytest", "backend/tests/", "-v", "--tb=short", "--junitxml=test_results/results.xml"]
+    networks:
+      - app_network
+    restart: "no"
+
 volumes:
   postgres_data:
   redis_data:
-
   prometheus_data:
   grafana_data:
+  uploads_data:
+  test_results:
 
-# ============================================
-# NETWORKS
-# ============================================
 networks:
   app_network:
     driver: bridge
