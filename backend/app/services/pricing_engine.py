@@ -59,6 +59,14 @@ def _calc_final_price(
     return _get_markup_price(base_price_usd, markup_percentage)
 
 
+def _calc_round_trip_final_price(
+    base_price_usd: Decimal,
+    markup_percentage: Decimal,
+) -> Decimal:
+    # Round-trip pricing should not reuse one-way price overrides.
+    return _get_markup_price(base_price_usd, markup_percentage)
+
+
 def _extract_departure_date(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -124,14 +132,8 @@ def apply_round_trip_pricing_logic(db: Session, bundles: list[dict[str, Any]], a
         except (KeyError, InvalidOperation, TypeError, ValueError):
             continue
 
-        outbound = bundle.get("outbound") or {}
-        departure_time = _extract_departure_date(outbound.get("departure_time"))
-        final_price_per_pax_usd = _calc_final_price(
-            db,
+        final_price_per_pax_usd = _calc_round_trip_final_price(
             base_price_usd,
-            outbound.get("airline_code"),
-            outbound.get("flight_number"),
-            departure_time.date() if departure_time else None,
             markup_percentage,
         )
         total_price_usd = _quantize_money(final_price_per_pax_usd * Decimal(adults))
@@ -171,20 +173,19 @@ def calculate_booking_totals(
         departure_time = _extract_departure_date(snapshot.get("departure_time"))
         airline_code = snapshot.get("airline_code")
         flight_number = snapshot.get("flight_number")
+        final_price_per_pax_usd = _calc_final_price(
+            db,
+            base_price_usd,
+            airline_code,
+            flight_number,
+            departure_time.date() if departure_time else None,
+            markup_percentage,
+        )
     else:
-        outbound = snapshot.get("outbound") or {}
-        departure_time = _extract_departure_date(outbound.get("departure_time"))
-        airline_code = outbound.get("airline_code")
-        flight_number = outbound.get("flight_number")
-
-    final_price_per_pax_usd = _calc_final_price(
-        db,
-        base_price_usd,
-        airline_code,
-        flight_number,
-        departure_time.date() if departure_time else None,
-        markup_percentage,
-    )
+        final_price_per_pax_usd = _calc_round_trip_final_price(
+            base_price_usd,
+            markup_percentage,
+        )
     total_price_usd = _quantize_money(final_price_per_pax_usd * Decimal(adults))
     total_price_mmk = _quantize_money(total_price_usd * usd_to_mmk)
     return {
