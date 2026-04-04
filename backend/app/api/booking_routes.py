@@ -1,12 +1,14 @@
 import json
+import hashlib
 import time
 from datetime import datetime, timedelta, timezone
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from backend.app.auth.deps import get_current_customer
 from backend.app.db.deps import get_db
@@ -31,6 +33,46 @@ def _safe_load_flight_snapshot(snapshot: str | None) -> dict:
 
 def _canonical_snapshot(snapshot: dict) -> str:
     return json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
+
+
+def _duplicate_booking_lock_key(
+    *,
+    customer_id: UUID,
+    booking_type: str,
+    adults: int,
+    bundle_key: str | None,
+    canonical_snapshot: str,
+) -> int:
+    fingerprint = "|".join(
+        [
+            str(customer_id),
+            booking_type,
+            str(adults),
+            bundle_key or "",
+            canonical_snapshot,
+        ]
+    )
+    digest = hashlib.sha256(fingerprint.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], byteorder="big", signed=True)
+
+
+def _acquire_duplicate_booking_lock(
+    db: Session,
+    *,
+    customer_id: UUID,
+    booking_type: str,
+    adults: int,
+    bundle_key: str | None,
+    canonical_snapshot: str,
+) -> None:
+    lock_key = _duplicate_booking_lock_key(
+        customer_id=customer_id,
+        booking_type=booking_type,
+        adults=adults,
+        bundle_key=bundle_key,
+        canonical_snapshot=canonical_snapshot,
+    )
+    db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
 
 
 def _require_non_empty_str(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
@@ -109,6 +151,15 @@ def create_booking(
     calculated_total_usd = calculated["final_price_usd"]
     calculated_total_mmk = calculated["final_price_mmk"]
 
+    _acquire_duplicate_booking_lock(
+        db,
+        customer_id=current_user.id,
+        booking_type=payload.type,
+        adults=payload.adults,
+        bundle_key=payload.bundle_key,
+        canonical_snapshot=canonical_snapshot,
+    )
+
     duplicate_cutoff = datetime.now(timezone.utc) - timedelta(seconds=_DUPLICATE_BOOKING_WINDOW_SECONDS)
     duplicate_filters = [
         Booking.customer_id == current_user.id,
@@ -123,6 +174,7 @@ def create_booking(
 
     existing = db.query(Booking).filter(*duplicate_filters).first()
     if existing:
+        db.rollback()
         raise HTTPException(status_code=400, detail="Duplicate booking detected. Please wait a few seconds.")
 
     booking = Booking(
@@ -217,10 +269,17 @@ def add_passengers(
 
 @router.get("/me", response_model=List[CustomerBookingOut])
 def list_my_bookings(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
 ):
-    bookings = db.query(Booking).filter(Booking.customer_id == current_user.id).order_by(Booking.created_at.desc()).all()
+    bookings = (
+        db.query(Booking)
+        .filter(Booking.customer_id == current_user.id)
+        .order_by(Booking.created_at.desc())
+        .offset(offset).limit(limit).all()
+    )
 
     return [
         CustomerBookingOut(

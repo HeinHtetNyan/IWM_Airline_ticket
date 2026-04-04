@@ -18,15 +18,6 @@ def get_staff_list(db: Session):
     )
 
 
-def get_all_staff(db: Session):
-    return (
-        db.query(AdminUser)
-        .filter(AdminUser.role == "STAFF")
-        .order_by(AdminUser.is_active.desc())
-        .all()
-    )
-
-
 def get_staff(db: Session, staff_id: UUID):
     return (
         db.query(AdminUser)

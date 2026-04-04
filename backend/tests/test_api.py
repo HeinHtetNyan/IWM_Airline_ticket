@@ -23,8 +23,6 @@ def test_health_check():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    # Note: Your health endpoint only returns 'status', not 'timestamp'
-    # That's why we removed the timestamp assertion
     print("✅ Health check passed!")
 
 
@@ -42,7 +40,6 @@ def test_database_connection():
     """Test database connection from inside container"""
     db = SessionLocal()
     try:
-        # Execute a simple query to verify connection
         result = db.execute(text("SELECT 1")).scalar()
         assert result == 1
         print("✅ Database connection works!")
@@ -54,7 +51,6 @@ def test_database_connection():
 def test_redis_connection():
     """Test Redis connection from inside container"""
     try:
-        # Test set and get operations
         redis_client.set("test_key", "test_value")
         value = redis_client.get("test_key")
         assert value == b"test_value" or value == "test_value"
@@ -100,7 +96,6 @@ def test_cors_headers():
             "Access-Control-Request-Method": "GET",
         }
     )
-    # CORS preflight should not return 500 error
     assert response.status_code != 500
     print(f"✅ CORS configured (response: {response.status_code})")
 
@@ -109,7 +104,6 @@ def test_cors_headers():
 def test_metrics_endpoint():
     """Test Prometheus metrics endpoint"""
     response = client.get("/metrics")
-    # Metrics endpoint may be 200 or 404 depending on configuration
     assert response.status_code in [200, 404]
     if response.status_code == 200:
         print("✅ Metrics endpoint is enabled!")
@@ -121,12 +115,9 @@ def test_metrics_endpoint():
 def test_protected_endpoint_requires_auth():
     """Test that protected endpoints require authentication"""
     response = client.get("/api/bookings")
-    # Any non-200 response means the endpoint is protected
-    # 401 Unauthorized, 403 Forbidden, 404 Not Found, or 405 Method Not Allowed are all acceptable
     assert response.status_code != 200
     print(f"✅ Authentication protection works (returned {response.status_code})")
 
 
-# ========== RUN TESTS ==========
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s", "--tb=short"])

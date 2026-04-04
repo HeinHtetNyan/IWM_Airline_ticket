@@ -20,6 +20,7 @@ from backend.app.core.redis import redis_client
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from backend.app.services.booking_auto_complete import auto_complete_bookings
 from backend.app.services.booking_deletion import auto_delete_expired_cancelled_bookings
+from backend.app.services.price_override_service import deactivate_expired_price_overrides
 
 
 
@@ -88,13 +89,14 @@ def lifecycle_job():
             db,
             delete_days=settings.CANCELLED_BOOKING_DELETE_DAYS,
         )
-
+        expired_overrides = deactivate_expired_price_overrides(db)
         logger.info(
-            "[LIFECYCLE] %s | Cancelled: %s | Completed: %s | Deleted: %s",
+            "[LIFECYCLE] %s | Cancelled: %s | Completed: %s | Deleted: %s | Expired overrides: %s",
             datetime.now(timezone.utc),
             cancel_result["cancelled_count"],
             complete_result["completed"],
             delete_result["deleted_count"],
+            expired_overrides,
         )
 
     except Exception:

@@ -73,7 +73,14 @@ def _client_key(request: Request) -> str:
     return peer_host or "unknown"
 
 
-def enforce_rate_limit(request: Request, *, action: str, max_requests: int, window_seconds: int) -> None:
+def enforce_rate_limit(
+    request: Request,
+    *,
+    action: str,
+    max_requests: int,
+    window_seconds: int,
+    fail_open: bool = True,
+) -> None:
     key = f"{action}:{_client_key(request)}"
     redis_key = f"rate_limit:{key}"
 
@@ -85,10 +92,15 @@ def enforce_rate_limit(request: Request, *, action: str, max_requests: int, wind
             )
         )
     except Exception:
+        if fail_open:
+            logger.exception(
+                "Rate limiter service unavailable (Redis error). Request allowed to prevent API disruption."
+            )
+            return
         logger.exception(
-            "Rate limiter service unavailable (Redis error). Request allowed to prevent API disruption."
+            "Rate limiter service unavailable (Redis error). Request denied for protected endpoint."
         )
-        return
+        raise HTTPException(status_code=503, detail="Rate limit service unavailable. Please try again later.")
 
     if request_count > max_requests:
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")

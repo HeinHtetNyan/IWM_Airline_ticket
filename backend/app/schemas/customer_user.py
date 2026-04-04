@@ -14,7 +14,7 @@ class CustomerUserResponse(BaseModel):
     email: EmailStr
     full_name: str | None
     phone: str | None
-    is_verified: bool
+    is_email_verified: bool
     is_active: bool
     created_at: datetime
     updated_at: datetime
