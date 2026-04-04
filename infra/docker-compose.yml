@@ -17,7 +17,7 @@ services:
       - TRUSTED_PROXY_CIDRS=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32}
       - STORAGE_TYPE=${STORAGE_TYPE:-local}
       - UPLOAD_DIR=${UPLOAD_DIR:-/app/uploads}
-      - PYTHONPATH=/app 
+      - PYTHONPATH=/app
     depends_on:
       db:
         condition: service_healthy
