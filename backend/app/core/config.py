@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # Email
     EMAIL_ENABLED: bool = True
-    EMAIL_HOST: str = "smtp.example.com"
+    EMAIL_HOST: str = "smtp.your-domain.com"
     EMAIL_PORT: int = 587
     EMAIL_USERNAME: str = ""
     EMAIL_PASSWORD: str = ""
@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     LIFECYCLE_JOB_INTERVAL_MINUTES: int = 5
     STARTUP_DB_MAX_RETRIES: int = 10
     STARTUP_DB_RETRY_DELAY_SECONDS: int = 2
+
+    # DB Pool
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 40
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
+
+    # Booking retention
+    CANCELLED_BOOKING_DELETE_DAYS: int = 7
 
     # File storage
     STORAGE_TYPE: str = "local"
@@ -138,15 +147,6 @@ class Settings(BaseSettings):
         if self.REDIS_PASSWORD:
             auth = f":{quote(self.REDIS_PASSWORD, safe='')}@"
         return f"redis://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
-
-    # DB Pool
-    DB_POOL_SIZE: int = 20
-    DB_MAX_OVERFLOW: int = 40
-    DB_POOL_TIMEOUT: int = 30
-    DB_POOL_RECYCLE: int = 1800
-
-    # Booking retention
-    CANCELLED_BOOKING_DELETE_DAYS: int = 7
 
     model_config = SettingsConfigDict(
         env_file=".env",
