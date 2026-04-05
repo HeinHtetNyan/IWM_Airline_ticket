@@ -600,6 +600,13 @@ async def replace_file(
     admin: AdminUser = Depends(require_admin),
 ):
     booking = _get_booking_file_record(db, booking_id)
+
+    if booking.status == "CANCELLED":
+        raise HTTPException(status_code=400, detail="Cannot replace ticket for cancelled booking")
+
+    if booking.status == "COMPLETED":
+        raise HTTPException(status_code=400, detail="Cannot replace ticket for completed booking")
+
     await _validate_upload_file(file)
 
     storage = get_storage()
@@ -660,7 +667,12 @@ async def get_secure_ticket(
             raise HTTPException(status_code=500, detail="Storage failure") from exc
         return RedirectResponse(url=signed_url, status_code=307)
 
-    local_path = Path(settings.UPLOAD_DIR) / ticket_path
+    base_dir = Path(settings.UPLOAD_DIR).resolve()
+    local_path = (base_dir / ticket_path).resolve()
+
+    if not local_path.is_relative_to(base_dir):
+        raise HTTPException(status_code=403, detail="Invalid or unsafe file path")
+
     if not local_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -681,6 +693,13 @@ async def delete_file(
     admin: AdminUser = Depends(require_admin),
 ):
     booking = _get_booking_file_record(db, booking_id)
+
+    if booking.status == "CANCELLED":
+        raise HTTPException(status_code=400, detail="Cannot delete ticket for cancelled booking")
+
+    if booking.status == "COMPLETED":
+        raise HTTPException(status_code=400, detail="Cannot delete ticket for completed booking")
+
     storage = get_storage()
 
     old_path = _extract_storage_path(booking.ticket_file_url)
