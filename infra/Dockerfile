@@ -1,11 +1,14 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bullseye 
+#added bullseye becoz of connection issues with debian repositories
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN sed -i 's|http://deb.debian.org|http://cloudfront.debian.net|g' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
+#added "sed -i 's|http://deb.debian.org|http://cloudfront.debian.net|g' /etc/apt/sources.list && \" to fix connection issues with debian repositories"
 
 # Working directory inside container
 WORKDIR /app
@@ -14,8 +17,7 @@ WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install pytest for testing (optional, but useful)
-RUN pip install pytest pytest-cov pytest-mock
+#Deleted Run pip install pytest pytest-cov pytest-mock (becoz pytest is already in requirements.txt)
 
 # Copy the whole application code
 # It will land in /app/backend (because we copy the 'backend' folder into /app)
