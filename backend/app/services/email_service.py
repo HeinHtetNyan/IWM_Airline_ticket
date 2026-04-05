@@ -1,6 +1,7 @@
 import logging
 import smtplib
 import ssl
+import time
 from email.utils import formataddr
 from email.message import EmailMessage
 from pathlib import Path
@@ -79,9 +80,20 @@ def render_template(template_name: str, context: dict[str, str]) -> str:
     return template.render(**context)
 
 
-def send_email(*, recipient: str, subject: str, template_name: str, context: dict[str, str]) -> None:
+def send_email(*, recipient: str, subject: str, template_name: str, context: dict[str, str], max_retries: int = 3) -> None:
     html_content = render_template(template_name, context)
-    email_backend.send(recipient=recipient, subject=subject, html_content=html_content)
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            email_backend.send(recipient=recipient, subject=subject, html_content=html_content)
+            return
+        except Exception as e:
+            if attempt == max_retries:
+                logger.error("Final attempt failed to send email to %s: %s", recipient, e)
+                raise
+            sleep_time = attempt * 2
+            logger.warning("Attempt %d to send email failed for %s. Retrying in %d seconds... Error: %s", attempt, recipient, sleep_time, e)
+            time.sleep(sleep_time)
 
 
 def _verification_url(token: str) -> str:
