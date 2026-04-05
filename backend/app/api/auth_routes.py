@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from backend.app.auth.deps import get_current_admin_optional
+from backend.app.auth.deps import get_current_admin_optional, get_current_customer
 from backend.app.auth.security import get_password_hash, verify_password
 from backend.app.auth.tokens import create_access_token
 from backend.app.crud.admin_auth import authenticate_admin, create_admin, get_admin_by_email
@@ -15,6 +15,7 @@ from backend.app.core.rate_limit import enforce_rate_limit
 from backend.app.schemas.auth import (
     AdminOut,
     AdminSignupRequest,
+    ChangePasswordRequest,
     CustomerSignupIn,
     ForgotPasswordRequest,
     LoginIn,
@@ -229,6 +230,27 @@ def reset_password(
     db.commit()
     mark_token_used(db, token_record)
     return Message(message="Password reset successfully")
+
+
+@router.post("/change-password", response_model=Message)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: CustomerUser = Depends(get_current_customer),
+):
+    if not verify_password(payload.old_password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Old password is incorrect")
+    if payload.old_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from old password",
+        )
+
+    current_user.password_hash = get_password_hash(payload.new_password)
+    db.add(current_user)
+    db.commit()
+
+    return Message(message="Password changed successfully")
 
 
 # ADMIN
