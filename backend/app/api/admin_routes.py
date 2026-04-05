@@ -750,7 +750,7 @@ def update_exchange_rate(
 @router.get("/staff", response_model=list[StaffResponse])
 def list_staff(
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin)
 ):
     return staff_crud.get_staff_list(db)
 
@@ -759,7 +759,7 @@ def list_staff(
 def get_staff(
     staff_id: UUID,
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin)
 ):
     staff = staff_crud.get_staff(db, staff_id)
 
@@ -774,7 +774,7 @@ def update_staff(
     staff_id: UUID,
     payload: StaffUpdate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin)
 ):
     staff = staff_crud.get_staff(db, staff_id)
 
@@ -811,7 +811,7 @@ def deactivate_staff(
 def activate_staff(
     staff_id: UUID,
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin),
+    _: AdminUser = Depends(require_super_admin)
 ):
     staff = staff_crud.get_staff(db, staff_id)
 
@@ -826,7 +826,7 @@ def activate_staff(
 @router.get("/customers", response_model=list[CustomerUserResponse])
 def list_customers(
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin)
 ):
     return customer_user_crud.get_customers(db)
 
@@ -836,7 +836,7 @@ def list_customers(
 def get_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin)
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 
@@ -852,7 +852,7 @@ def update_customer(
     customer_id: UUID,
     payload: CustomerUserUpdate,
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin)
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 
@@ -867,7 +867,7 @@ def update_customer(
 def deactivate_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin),
+    _: AdminUser = Depends(require_super_admin)
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 
@@ -882,7 +882,7 @@ def deactivate_customer(
 def activate_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _: str = Depends(require_super_admin),
+    _: AdminUser = Depends(require_super_admin)
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 
