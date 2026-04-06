@@ -592,6 +592,26 @@ def get_booking_audit(
     }
 
 
+@files_router.get("/status/{booking_id}", summary="Check Ticket Status")
+def check_ticket_status(
+    booking_id: UUID,
+    actor: CustomerUser | AdminUser = Depends(_get_request_actor),
+    db: Session = Depends(get_db),
+):
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
+    _ensure_booking_file_access(booking, actor)
+
+    return {
+        "booking_id": booking.id,
+        "has_ticket": booking.ticket_file_url is not None,
+        "ticket_uploaded_at": booking.ticket_uploaded_at,
+    }
+
+
 @files_router.put("/replace/{booking_id}")
 async def replace_file(
     booking_id: UUID,
@@ -644,7 +664,7 @@ async def replace_file(
     }
 
 
-@secure_router.get("/tickets/{booking_id}")
+@secure_router.get("/tickets/{booking_id}", summary="Download Ticket")
 async def get_secure_ticket(
     booking_id: UUID,
     actor: CustomerUser | AdminUser = Depends(_get_request_actor),
