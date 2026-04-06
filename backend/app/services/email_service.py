@@ -2,7 +2,7 @@ import logging
 import smtplib
 import ssl
 import time
-from email.utils import formataddr
+from email.utils import formataddr, formatdate, make_msgid
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Protocol
@@ -42,6 +42,8 @@ class SMTPEmailBackend:
         message["From"] = self._build_from_header()
         message["To"] = recipient
         message["Subject"] = subject
+        message["Date"] = formatdate(localtime=True)
+        message["Message-ID"] = make_msgid(domain=settings.EMAIL_FROM.split("@")[-1] if "@" in (settings.EMAIL_FROM or "") else "localhost")  
         message.set_content("Please view this email in an HTML-compatible client.")
         message.add_alternative(html_content, subtype="html")
 

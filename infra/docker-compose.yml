@@ -50,7 +50,7 @@ services:
     networks:
       - app_network
       - monitoring_network
-      # - mail_network # Uncomment when using local mailpit SMTP server (do not delete_network)
+      - mail_network # Uncomment when using local mailpit SMTP server (do not delete_network)
 
   db:
     image: postgres:15-alpine
@@ -187,8 +187,12 @@ volumes:
 networks:
   app_network:
     driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
   monitoring_network:
     driver: bridge
-  # mail_network: #uncomment when using local mailpit SMTP server (do not delete_network)
-    # external: true
-    # name: mail_network
+    driver_opts:
+      com.docker.network.driver.mtu: "1400"
+  mail_network: #uncomment when using local mailpit SMTP server (do not delete_network)
+    external: true
+    name: mail_network
