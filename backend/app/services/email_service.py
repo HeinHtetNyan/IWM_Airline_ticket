@@ -5,6 +5,7 @@ import time
 from email.utils import formataddr, formatdate, make_msgid
 from email.message import EmailMessage
 from pathlib import Path
+from socket import gaierror
 from typing import Protocol
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -66,12 +67,32 @@ class SMTPEmailBackend:
                 timeout=settings.EMAIL_TIMEOUT_SECONDS,
             )
 
-        with smtp:
-            if not settings.EMAIL_USE_SSL and settings.EMAIL_USE_TLS:
-                smtp.starttls(context=ssl_context)
-            if settings.EMAIL_REQUIRE_AUTH:
-                smtp.login(settings.EMAIL_USERNAME, settings.EMAIL_PASSWORD)
-            smtp.send_message(message)
+        try:
+            with smtp:
+                if not settings.EMAIL_USE_SSL and settings.EMAIL_USE_TLS:
+                    smtp.starttls(context=ssl_context)
+                if settings.EMAIL_REQUIRE_AUTH:
+                    smtp.login(settings.EMAIL_USERNAME, settings.EMAIL_PASSWORD)
+                smtp.send_message(message)
+                logger.info("Successfully sent email to %s (Subject: '%s')", recipient, subject)
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error("Failed to send email to %s: Authentication failed. Check SMTP credentials. %s", recipient, e)
+            raise
+        except smtplib.SMTPConnectError as e:
+            logger.error("Failed to send email to %s: Could not connect to SMTP server %s:%s. %s", recipient, settings.EMAIL_HOST, settings.EMAIL_PORT, e)
+            raise
+        except smtplib.SMTPException as e:
+            logger.error("Failed to send email to %s: SMTP error occurred: %s", recipient, e)
+            raise
+        except TimeoutError as e:
+            logger.error("Failed to send email to %s: Connection to SMTP server %s timed out. %s", recipient, settings.EMAIL_HOST, e)
+            raise
+        except gaierror as e:
+            logger.error("Failed to send email to %s: Could not resolve SMTP host %s. %s", recipient, settings.EMAIL_HOST, e)
+            raise
+        except Exception as e:
+            logger.error("Failed to send email to %s: An unexpected error occurred: %s", recipient, e)
+            raise
 
 
 email_backend: EmailBackend = SMTPEmailBackend()
