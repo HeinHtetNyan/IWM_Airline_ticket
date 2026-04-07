@@ -8,6 +8,7 @@ from pathlib import Path
 from socket import gaierror
 from typing import Protocol
 
+import mailtrap as mt
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from backend.app.core.config import settings
@@ -95,7 +96,36 @@ class SMTPEmailBackend:
             raise
 
 
-email_backend: EmailBackend = SMTPEmailBackend()
+class MailtrapEmailBackend:
+    @staticmethod
+    def _get_sender() -> mt.Address:
+        email_from = settings.EMAIL_FROM or "hello@heinh.dev"
+        name = settings.EMAIL_FROM_NAME or "Mailtrap Test"
+        return mt.Address(email=email_from, name=name)
+
+    def send(self, *, recipient: str, subject: str, html_content: str) -> None:
+        if not settings.EMAIL_ENABLED:
+            logger.info("Email sending is disabled. Skipping message to %s", recipient)
+            return
+
+        try:
+            mail = mt.Mail(
+                sender=self._get_sender(),
+                to=[mt.Address(email=recipient)],
+                subject=subject,
+                html=html_content,
+                category="Integration Test",
+            )
+            client = mt.MailtrapClient(token=settings.MAILTRAP_API_TOKEN)
+            client.send(mail)
+            logger.info("Successfully sent email to %s (Subject: '%s') via Mailtrap", recipient, subject)
+        except Exception as e:
+            logger.error("Failed to send email to %s using Mailtrap: %s", recipient, e)
+            raise
+
+
+# Switch to MailtrapEmailBackend
+email_backend: EmailBackend = MailtrapEmailBackend()
 
 
 def render_template(template_name: str, context: dict[str, str]) -> str:

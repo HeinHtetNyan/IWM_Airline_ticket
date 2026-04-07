@@ -53,3 +53,4 @@ pytest==7.4.3
 pytest-cov==4.1.0
 
 prometheus-fastapi-instrumentator>=6.1.0
+mailtrap>=2.5.0

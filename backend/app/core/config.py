@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     EMAIL_REQUIRE_AUTH: bool = True
     EMAIL_TIMEOUT_SECONDS: int = 30
     FRONTEND_BASE_URL: str = "http://localhost:3000"
+    MAILTRAP_API_TOKEN: str = ""
 
     # Auth rate limiting
     RATE_LIMIT_FORGOT_PASSWORD: int = 5

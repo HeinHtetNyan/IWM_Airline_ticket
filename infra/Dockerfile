@@ -1,21 +1,21 @@
-FROM python:3.11-slim-bullseye 
+FROM python:3.12-slim-bookworm 
 #added bullseye becoz of connection issues with debian repositories
 
 # Install system dependencies
-RUN sed -i 's|http://deb.debian.org|http://cloudfront.debian.net|g' /etc/apt/sources.list && \
-    apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
-#added "sed -i 's|http://deb.debian.org|http://cloudfront.debian.net|g' /etc/apt/sources.list && \" to fix connection issues with debian repositories"
+# Removed the sources.list sed command as bookworm does not need it and uses debian.sources
 
 # Working directory inside container
 WORKDIR /app
 
 # Copy requirements and install
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 #Deleted Run pip install pytest pytest-cov pytest-mock (becoz pytest is already in requirements.txt)
 
