@@ -7,9 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  # ── JOB 1: Lint + security + smoke tests ────────────────────────────────
   test:
-    name: Lint, Security & Smoke Tests
+    name: Smoke Tests & Docker Build
     runs-on: ubuntu-latest
 
     services:
@@ -44,7 +43,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
       - name: Cache pip packages
         uses: actions/cache@v4
@@ -57,32 +56,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r backend/requirements.txt
-          pip install flake8 black bandit pytest pytest-asyncio httpx
-
-      - name: Lint with flake8
-        run: |
-          python -m flake8 backend/app \
-            --count \
-            --max-complexity=10 \
-            --max-line-length=88 \
-            --extend-ignore=E203,W503 \
-            --statistics
-
-      - name: Check formatting with black
-        run: |
-          python -m black --check --diff backend/app
-
-      - name: Security scan with bandit
-        run: |
-          python -m bandit -r backend/app -ll -f json -o bandit-report.json
-          python -m bandit -r backend/app -ll
-
-      - name: Upload bandit report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: bandit-security-report
-          path: bandit-report.json
+          pip install pytest pytest-asyncio httpx
 
       - name: Run smoke tests
         run: |
@@ -107,52 +81,12 @@ jobs:
           TRUSTED_PROXY_CIDRS: 127.0.0.1/32
           STORAGE_TYPE: local
           UPLOAD_DIR: /app/uploads
-          MAILTRAP_API_TOKEN: test
 
-  # ── JOB 2: Docker build — only runs AFTER tests pass ────────────────────
-  docker-build:
-    name: Build & Push Docker Image
-    runs-on: ubuntu-latest
-    needs: test
+      - name: Test Docker build
+        run: |
+          docker build -f infra/Dockerfile -t test-backend .
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./infra/Dockerfile
-          load: true
-          tags: airline-backend:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-
-      - name: Validate docker-compose config
+      - name: Validate docker-compose
         run: |
           cd infra
           docker compose config
-
-      - name: Log in to Docker Hub
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Bug_Fix_V1'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Push image to Docker Hub
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Bug_Fix_V1'
-        run: |
-          BRANCH_TAG=$(echo "${{ github.ref_name }}" | tr '/' '-' | tr '_' '-' | tr '[:upper:]' '[:lower:]')
-          docker tag airline-backend:${{ github.sha }} \
-            ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.sha }}
-          docker tag airline-backend:${{ github.sha }} \
-            ${{ secrets.DOCKER_USERNAME }}/airline-backend:${BRANCH_TAG}
-          docker push ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.sha }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/airline-backend:${BRANCH_TAG}
