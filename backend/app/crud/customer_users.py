@@ -6,19 +6,11 @@ from backend.app.models.customer_user import CustomerUser
 
 
 def get_customers(db: Session):
-    return (
-        db.query(CustomerUser)
-        .order_by(CustomerUser.created_at.desc())
-        .all()
-    )
+    return db.query(CustomerUser).order_by(CustomerUser.created_at.desc()).all()
 
 
 def get_customer(db: Session, customer_id: UUID):
-    return (
-        db.query(CustomerUser)
-        .filter(CustomerUser.id == customer_id)
-        .first()
-    )
+    return db.query(CustomerUser).filter(CustomerUser.id == customer_id).first()
 
 
 def update_customer(db: Session, customer: CustomerUser, data: dict):

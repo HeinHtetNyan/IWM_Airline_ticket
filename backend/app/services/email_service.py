@@ -23,8 +23,7 @@ _template_env = Environment(
 
 
 class EmailBackend(Protocol):
-    def send(self, *, recipient: str, subject: str, html_content: str) -> None:
-        ...
+    def send(self, *, recipient: str, subject: str, html_content: str) -> None: ...
 
 
 class SMTPEmailBackend:
@@ -133,7 +132,9 @@ def render_template(template_name: str, context: dict[str, str]) -> str:
     return template.render(**context)
 
 
-def send_email(*, recipient: str, subject: str, template_name: str, context: dict[str, str], max_retries: int = 3) -> None:
+def send_email(
+    *, recipient: str, subject: str, template_name: str, context: dict[str, str]
+) -> None:
     html_content = render_template(template_name, context)
     
     for attempt in range(1, max_retries + 1):

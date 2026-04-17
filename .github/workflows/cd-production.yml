@@ -1,0 +1,118 @@
+name: CD - Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["CI - Test My Code"]
+    branches: [main]
+    types: [completed]
+
+jobs:
+  deploy-production:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    environment: production
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Confirm image exists on Docker Hub
+        run: |
+          docker pull ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.event.workflow_run.head_sha }}
+          echo "Image confirmed: ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.event.workflow_run.head_sha }}"
+
+      - name: Deploy to production via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: 10317
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            echo "=== Starting production deployment ==="
+
+            cd /home/${{ secrets.SERVER_USER }}/production
+
+            # Pull latest code safely
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Set the new image tag
+            NEW_IMAGE="${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.event.workflow_run.head_sha }}"
+
+            # Pull the pre-built tested image from Docker Hub
+            docker pull "$NEW_IMAGE"
+
+            # Save current running image for rollback
+            CURRENT_CONTAINER=$(docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml ps -q backend 2>/dev/null || echo "")
+            if [ -n "$CURRENT_CONTAINER" ]; then
+              PREVIOUS_IMAGE=$(docker inspect --format='{{index .Config.Image}}' "$CURRENT_CONTAINER" 2>/dev/null || echo "")
+            else
+              PREVIOUS_IMAGE=""
+            fi
+            echo "Previous image: $PREVIOUS_IMAGE"
+            echo "New image: $NEW_IMAGE"
+
+            # Update image tag in prod compose file
+            sed -i "s|image: .*/airline-backend:.*|image: $NEW_IMAGE|" infra/docker-compose.prod.yml
+
+            # Run database migrations using new image before starting
+            docker run --rm \
+              --network host \
+              --env-file /home/${{ secrets.SERVER_USER }}/production/.env.prod \
+              "$NEW_IMAGE" \
+              alembic upgrade head
+
+            # Deploy - restart only backend
+            cd infra
+            docker compose \
+              -f docker-compose.yml \
+              -f docker-compose.prod.yml \
+              --env-file ../.env.prod \
+              --project-name airline-prod \
+              up -d --no-deps --no-build backend
+
+            # Health check retry loop - 60 seconds total
+            echo "Waiting for production to become healthy..."
+            HEALTHY=false
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then
+                echo "Production is healthy after attempt $i"
+                HEALTHY=true
+                break
+              fi
+              echo "Attempt $i/30 - not ready, waiting 2s..."
+              sleep 2
+            done
+
+            # Rollback if health check failed
+            if [ "$HEALTHY" = "false" ]; then
+              echo "Health check failed - rolling back production..."
+              if [ -n "$PREVIOUS_IMAGE" ]; then
+                sed -i "s|image: .*/airline-backend:.*|image: $PREVIOUS_IMAGE|" docker-compose.prod.yml
+                docker compose \
+                  -f docker-compose.yml \
+                  -f docker-compose.prod.yml \
+                  --env-file ../.env.prod \
+                  --project-name airline-prod \
+                  up -d --no-deps --no-build backend
+                echo "Rolled back to: $PREVIOUS_IMAGE"
+              else
+                echo "No previous image - cannot rollback"
+              fi
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 backend
+              exit 1
+            fi
+
+            # Cleanup old images
+            docker image prune -f --filter "until=72h"
+            echo "=== Production deployment complete: $NEW_IMAGE ==="

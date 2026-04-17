@@ -10,15 +10,13 @@ from backend.app.core.redis import redis_client
 
 logger = logging.getLogger(__name__)
 
-_RATE_LIMIT_SCRIPT = redis_client.register_script(
-    """
+_RATE_LIMIT_SCRIPT = redis_client.register_script("""
     local current = redis.call("INCR", KEYS[1])
     if current == 1 then
         redis.call("EXPIRE", KEYS[1], ARGV[1])
     end
     return current
-    """
-)
+    """)
 
 
 @lru_cache(maxsize=1)
@@ -65,7 +63,7 @@ def _client_key(request: Request) -> str:
     if not _is_trusted_proxy(peer_host):
         return peer_host or "unknown"
 
-    chain = [* _forwarded_chain(request), peer_host]
+    chain = [*_forwarded_chain(request), peer_host]
     for host in reversed(chain):
         if not _is_trusted_proxy(host):
             return host
@@ -100,7 +98,12 @@ def enforce_rate_limit(
         logger.exception(
             "Rate limiter service unavailable (Redis error). Request denied for protected endpoint."
         )
-        raise HTTPException(status_code=503, detail="Rate limit service unavailable. Please try again later.")
+        raise HTTPException(
+            status_code=503,
+            detail="Rate limit service unavailable. Please try again later.",
+        )
 
     if request_count > max_requests:
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+        raise HTTPException(
+            status_code=429, detail="Too many requests. Please try again later."
+        )

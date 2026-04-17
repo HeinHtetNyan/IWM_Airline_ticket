@@ -9,9 +9,17 @@ class PricingConfig(Base):
 
     id = Column(Integer, primary_key=True, default=1)
     global_markup_percentage = Column(Float, nullable=False, default=15.0)
-    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     __table_args__ = (
         CheckConstraint("id = 1", name="ck_pricing_config_singleton_id"),
-        CheckConstraint("global_markup_percentage >= 0", name="ck_pricing_config_markup_non_negative"),
+        CheckConstraint(
+            "global_markup_percentage >= 0",
+            name="ck_pricing_config_markup_non_negative",
+        ),
     )

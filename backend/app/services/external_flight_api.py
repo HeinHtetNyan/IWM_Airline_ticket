@@ -19,9 +19,7 @@ def _request(url: str, headers: dict, params: dict) -> dict:
 
     for attempt in range(3):  # retry 3 times
         try:
-            with httpx.Client(
-                timeout=httpx.Timeout(20.0, connect=5.0)
-            ) as client:
+            with httpx.Client(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
                 response = client.get(url, headers=headers, params=params)
 
             response.raise_for_status()
@@ -40,7 +38,7 @@ def _request(url: str, headers: dict, params: dict) -> dict:
             logger.warning("External flight API bad response: %s", str(exc))
 
         if attempt < 2:
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
 
     logger.error("External flight API failed after retries", exc_info=last_error)
     raise HTTPException(status_code=503, detail="Flight provider unavailable")

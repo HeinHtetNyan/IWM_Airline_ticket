@@ -1,6 +1,15 @@
 import uuid
 
-from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, Float, Index, String
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    Index,
+    String,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
@@ -17,10 +26,14 @@ class PriceOverride(Base):
     override_price_usd = Column(Float, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True, server_default="true")
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     __table_args__ = (
-        CheckConstraint("override_price_usd > 0", name="ck_price_override_price_positive"),
+        CheckConstraint(
+            "override_price_usd > 0", name="ck_price_override_price_positive"
+        ),
         Index(
             "ix_price_overrides_flight_active",
             "airline_code",

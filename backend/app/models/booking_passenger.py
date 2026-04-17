@@ -18,7 +18,9 @@ from backend.app.db.base import Base
 class BookingPassenger(Base):
     __tablename__ = "booking_passengers"
     __table_args__ = (
-        UniqueConstraint("booking_id", "passport_number", name="uq_booking_passenger_passport"),
+        UniqueConstraint(
+            "booking_id", "passport_number", name="uq_booking_passenger_passport"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

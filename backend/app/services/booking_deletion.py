@@ -37,17 +37,16 @@ def delete_cancelled_booking_by_admin(
     admin: AdminUser,
 ) -> dict:
     booking = (
-        db.query(Booking)
-        .filter(Booking.id == booking_id)
-        .with_for_update()
-        .first()
+        db.query(Booking).filter(Booking.id == booking_id).with_for_update().first()
     )
 
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if booking.status != "CANCELLED":
-        raise HTTPException(status_code=400, detail="Only cancelled bookings can be deleted")
+        raise HTTPException(
+            status_code=400, detail="Only cancelled bookings can be deleted"
+        )
 
     try:
         _create_deletion_log(
@@ -90,9 +89,12 @@ def auto_delete_expired_cancelled_bookings(
                 db.query(Booking)
                 .filter(
                     Booking.status == "CANCELLED",
-                    func.coalesce(Booking.status_updated_at, Booking.created_at) <= threshold_time,
+                    func.coalesce(Booking.status_updated_at, Booking.created_at)
+                    <= threshold_time,
                 )
-                .order_by(func.coalesce(Booking.status_updated_at, Booking.created_at).asc())
+                .order_by(
+                    func.coalesce(Booking.status_updated_at, Booking.created_at).asc()
+                )
                 .limit(batch_size)
                 .all()
             )

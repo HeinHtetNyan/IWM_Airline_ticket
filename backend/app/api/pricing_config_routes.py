@@ -4,8 +4,14 @@ from sqlalchemy.orm import Session
 from backend.app.auth.deps import require_admin, require_super_admin
 from backend.app.db.deps import get_db
 from backend.app.models.admin_user import AdminUser
-from backend.app.schemas.pricing_config import PricingConfigResponse, PricingConfigUpdate
-from backend.app.services.pricing_config_service import get_pricing_config, update_global_markup
+from backend.app.schemas.pricing_config import (
+    PricingConfigResponse,
+    PricingConfigUpdate,
+)
+from backend.app.services.pricing_config_service import (
+    get_pricing_config,
+    update_global_markup,
+)
 
 router = APIRouter(prefix="/admin/pricing-config", tags=["admin"])
 

@@ -37,7 +37,11 @@ def create_price_override(db: Session, payload: PriceOverrideCreate) -> PriceOve
 
 
 def list_price_overrides(db: Session) -> list[PriceOverride]:
-    return db.query(PriceOverride).order_by(PriceOverride.created_at.desc(), PriceOverride.id.desc()).all()
+    return (
+        db.query(PriceOverride)
+        .order_by(PriceOverride.created_at.desc(), PriceOverride.id.desc())
+        .all()
+    )
 
 
 def get_active_price_override(
@@ -58,7 +62,10 @@ def get_active_price_override(
             PriceOverride.flight_number == flight_number.strip().upper(),
             PriceOverride.departure_date == departure_date,
             PriceOverride.is_active.is_(True),
-            or_(PriceOverride.expires_at.is_(None), PriceOverride.expires_at > current_time),
+            or_(
+                PriceOverride.expires_at.is_(None),
+                PriceOverride.expires_at > current_time,
+            ),
         )
         .order_by(PriceOverride.created_at.desc(), PriceOverride.id.desc())
         .first()

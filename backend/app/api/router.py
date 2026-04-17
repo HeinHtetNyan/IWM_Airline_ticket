@@ -1,6 +1,10 @@
 from fastapi import APIRouter
 
-from backend.app.api.admin_routes import files_router, router as admin_router, secure_router
+from backend.app.api.admin_routes import (
+    files_router,
+    router as admin_router,
+    secure_router,
+)
 from backend.app.api.auth_routes import router as auth_router
 from backend.app.api.booking_routes import router as booking_router
 from backend.app.api.contact_routes import router as contact_router

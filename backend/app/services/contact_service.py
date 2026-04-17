@@ -23,7 +23,9 @@ def get_contact_by_customer_id(
 def get_my_contact_or_404(db: Session, customer_id: UUID) -> CustomerContact:
     contact = get_contact_by_customer_id(db, customer_id)
     if not contact:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
+        )
     return contact
 
 
@@ -62,7 +64,9 @@ def update_my_contact(
 ) -> CustomerContact:
     contact = get_contact_by_customer_id(db, customer_id, for_update=True)
     if not contact:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Contact not found"
+        )
 
     for field, value in payload.model_dump().items():
         setattr(contact, field, value)

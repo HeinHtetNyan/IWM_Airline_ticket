@@ -48,6 +48,7 @@ from backend.app.schemas.customer_user import CustomerUserResponse, CustomerUser
 from backend.app.crud import staff as staff_crud
 from backend.app.crud import customer_users as customer_user_crud
 import logging
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -79,7 +80,9 @@ def _serialize_booking_user(user: CustomerUser | None) -> BookingUserOut | None:
     )
 
 
-def _detect_folder_from_content_type(content_type: str | None, *, is_booking: bool = False) -> str:
+def _detect_folder_from_content_type(
+    content_type: str | None, *, is_booking: bool = False
+) -> str:
     if content_type in {"image/jpeg", "image/png"}:
         return "private/images"
     if content_type == "application/pdf" or is_booking:
@@ -110,8 +113,12 @@ async def _validate_upload_file(file: UploadFile) -> None:
     await file.seek(0)
 
     expected_signatures = FILE_SIGNATURES.get(file.content_type or "")
-    if not expected_signatures or not any(header.startswith(signature) for signature in expected_signatures):
-        raise HTTPException(status_code=400, detail="File content does not match the declared file type")
+    if not expected_signatures or not any(
+        header.startswith(signature) for signature in expected_signatures
+    ):
+        raise HTTPException(
+            status_code=400, detail="File content does not match the declared file type"
+        )
 
 
 def _extract_storage_path(file_url: str | None) -> str | None:
@@ -171,11 +178,14 @@ def _get_booking_file_record(db: Session, file_id: UUID) -> Booking:
     return booking
 
 
-def _ensure_booking_file_access(booking: Booking, actor: CustomerUser | AdminUser) -> None:
+def _ensure_booking_file_access(
+    booking: Booking, actor: CustomerUser | AdminUser
+) -> None:
     if isinstance(actor, AdminUser):
         return
     if booking.customer_id != actor.id:
         raise HTTPException(status_code=403, detail="Unauthorized access")
+
 
 # ADMIN IDENTITY
 @router.get("/me")
@@ -203,41 +213,54 @@ def admin_dashboard(
         logger.warning(f"Invalid timezone received: {tz_name}")
         local_tz = ZoneInfo("UTC")
 
-    today_start = datetime.now(local_tz).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(ZoneInfo("UTC"))
-
-    total_paid_bookings, revenue_usd, revenue_mmk = db.query(
-        func.count(Booking.id),
-        func.coalesce(func.sum(Booking.final_price_usd), 0),
-        func.coalesce(func.sum(Booking.final_price_mmk), 0),
-    ).filter(
-        Booking.payment_status == "PAID",
-        Booking.status != "CANCELLED"
-    ).one()
-
-    status_counts = dict(
-        db.query(Booking.status, func.count(Booking.id))
-        .group_by(Booking.status)
-        .all()
+    today_start = (
+        datetime.now(local_tz)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .astimezone(ZoneInfo("UTC"))
     )
 
-    paid_processing = db.query(func.count(Booking.id)).filter(
-        Booking.status == "PROCESSING",
-        Booking.payment_status == "PAID",
-        Booking.status != "CANCELLED"
-    ).scalar()
+    total_paid_bookings, revenue_usd, revenue_mmk = (
+        db.query(
+            func.count(Booking.id),
+            func.coalesce(func.sum(Booking.final_price_usd), 0),
+            func.coalesce(func.sum(Booking.final_price_mmk), 0),
+        )
+        .filter(Booking.payment_status == "PAID", Booking.status != "CANCELLED")
+        .one()
+    )
 
-    bookings_today = db.query(func.count(Booking.id)).filter(
-        Booking.created_at >= today_start
-    ).scalar()
+    status_counts = dict(
+        db.query(Booking.status, func.count(Booking.id)).group_by(Booking.status).all()
+    )
 
-    revenue_today = db.query(
-        func.coalesce(func.sum(Booking.final_price_usd), 0),
-        func.coalesce(func.sum(Booking.final_price_mmk), 0),
-    ).filter(
-        Booking.payment_status == "PAID",
-        Booking.status != "CANCELLED",
-        Booking.created_at >= today_start
-    ).one()
+    paid_processing = (
+        db.query(func.count(Booking.id))
+        .filter(
+            Booking.status == "PROCESSING",
+            Booking.payment_status == "PAID",
+            Booking.status != "CANCELLED",
+        )
+        .scalar()
+    )
+
+    bookings_today = (
+        db.query(func.count(Booking.id))
+        .filter(Booking.created_at >= today_start)
+        .scalar()
+    )
+
+    revenue_today = (
+        db.query(
+            func.coalesce(func.sum(Booking.final_price_usd), 0),
+            func.coalesce(func.sum(Booking.final_price_mmk), 0),
+        )
+        .filter(
+            Booking.payment_status == "PAID",
+            Booking.status != "CANCELLED",
+            Booking.created_at >= today_start,
+        )
+        .one()
+    )
 
     return AdminDashboard(
         financial=DashboardFinancial(
@@ -269,9 +292,8 @@ def list_all_bookings(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_admin),
 ):
-    query = (
-        db.query(Booking, CustomerUser)
-        .outerjoin(CustomerUser, Booking.customer_id == CustomerUser.id)
+    query = db.query(Booking, CustomerUser).outerjoin(
+        CustomerUser, Booking.customer_id == CustomerUser.id
     )
 
     if status:
@@ -279,7 +301,9 @@ def list_all_bookings(
             raise HTTPException(status_code=400, detail="Invalid booking status")
         query = query.filter(Booking.status == status)
 
-    bookings = query.order_by(Booking.created_at.desc()).offset(offset).limit(limit).all()
+    bookings = (
+        query.order_by(Booking.created_at.desc()).offset(offset).limit(limit).all()
+    )
 
     return [
         BookingOut(
@@ -370,10 +394,7 @@ def update_payment_status(
     admin: AdminUser = Depends(require_admin),
 ):
     booking = (
-        db.query(Booking)
-        .filter(Booking.id == booking_id)
-        .with_for_update()
-        .first()
+        db.query(Booking).filter(Booking.id == booking_id).with_for_update().first()
     )
 
     if not booking:
@@ -385,14 +406,12 @@ def update_payment_status(
 
     if booking.status == "CANCELLED":
         raise HTTPException(
-            status_code=400,
-            detail="Cannot change payment for cancelled booking"
+            status_code=400, detail="Cannot change payment for cancelled booking"
         )
 
     if booking.status == "COMPLETED":
         raise HTTPException(
-            status_code=400,
-            detail="Cannot change payment for completed booking"
+            status_code=400, detail="Cannot change payment for completed booking"
         )
 
     booking.payment_status = payload.payment_status
@@ -423,17 +442,16 @@ def update_booking_status(
     admin: AdminUser = Depends(require_admin),
 ):
     booking = (
-        db.query(Booking)
-        .filter(Booking.id == booking_id)
-        .with_for_update()
-        .first()
+        db.query(Booking).filter(Booking.id == booking_id).with_for_update().first()
     )
 
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if booking.status == "COMPLETED":
-        raise HTTPException(status_code=400, detail="Cannot change status for completed booking")
+        raise HTTPException(
+            status_code=400, detail="Cannot change status for completed booking"
+        )
 
     if payload.status == booking.status:
         return {
@@ -456,7 +474,9 @@ def update_booking_status(
         )
 
     if payload.status == "COMPLETED" and booking.payment_status != "PAID":
-        raise HTTPException(status_code=400, detail="Cannot complete booking before payment is PAID")
+        raise HTTPException(
+            status_code=400, detail="Cannot complete booking before payment is PAID"
+        )
 
     booking.status = payload.status
     if booking.type == "ROUND_TRIP" and payload.status == "COMPLETED":
@@ -489,22 +509,22 @@ async def upload_ticket(
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if booking.status == "CANCELLED":
-        raise HTTPException(status_code=400, detail="Cannot upload ticket for cancelled booking")
+        raise HTTPException(
+            status_code=400, detail="Cannot upload ticket for cancelled booking"
+        )
 
     if booking.status == "COMPLETED":
-        raise HTTPException(status_code=400, detail="Cannot upload ticket for completed booking")
+        raise HTTPException(
+            status_code=400, detail="Cannot upload ticket for completed booking"
+        )
 
     if booking.payment_status != "PAID":
         raise HTTPException(
-            status_code=400,
-            detail="Cannot upload ticket before payment is PAID"
+            status_code=400, detail="Cannot upload ticket before payment is PAID"
         )
 
     if booking.ticket_file_url is not None:
-        raise HTTPException(
-            status_code=400,
-            detail="Ticket already uploaded"
-        )
+        raise HTTPException(status_code=400, detail="Ticket already uploaded")
 
     await _validate_upload_file(file)
 
@@ -741,6 +761,8 @@ async def delete_file(
         "deleted": True,
         "deleted_by": admin.email,
     }
+
+
 # EXCHANGE RATE (ADMIN CONFIG)
 @router.get("/exchange-rate")
 def get_exchange_rate(
@@ -750,10 +772,7 @@ def get_exchange_rate(
     rate = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
 
     if not rate:
-        raise HTTPException(
-            status_code=404,
-            detail="Exchange rate not configured"
-        )
+        raise HTTPException(status_code=404, detail="Exchange rate not configured")
 
     return {
         "usd_to_mmk": rate.usd_to_mmk,
@@ -784,21 +803,21 @@ def update_exchange_rate(
     }
 
 
-#staff management
-#list staff
+# staff management
+# list staff
 @router.get("/staff", response_model=list[StaffResponse])
 def list_staff(
-    db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    db: Session = Depends(get_db), _: AdminUser = Depends(require_super_admin)
 ):
     return staff_crud.get_staff_list(db)
 
-#get staff detail
+
+# get staff detail
 @router.get("/staff/{staff_id}", response_model=StaffResponse)
 def get_staff(
     staff_id: UUID,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin),
 ):
     staff = staff_crud.get_staff(db, staff_id)
 
@@ -807,13 +826,14 @@ def get_staff(
 
     return staff
 
-#update staff
+
+# update staff
 @router.patch("/staff/{staff_id}", response_model=StaffResponse)
 def update_staff(
     staff_id: UUID,
     payload: StaffUpdate,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin),
 ):
     staff = staff_crud.get_staff(db, staff_id)
 
@@ -823,7 +843,7 @@ def update_staff(
     return staff_crud.update_staff(db, staff, payload.model_dump(exclude_unset=True))
 
 
-#deactivate staff
+# deactivate staff
 @router.patch("/staff/{staff_id}/deactivate")
 def deactivate_staff(
     staff_id: UUID,
@@ -838,19 +858,18 @@ def deactivate_staff(
     # Prevent disabling yourself
     if staff.id == current_admin.id:
         raise HTTPException(
-            status_code=400,
-            detail="You cannot deactivate your own account"
+            status_code=400, detail="You cannot deactivate your own account"
         )
 
     return staff_crud.deactivate_staff(db, staff)
 
 
-#activate staff
+# activate staff
 @router.patch("/staff/{staff_id}/activate")
 def activate_staff(
     staff_id: UUID,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin),
 ):
     staff = staff_crud.get_staff(db, staff_id)
 
@@ -860,22 +879,21 @@ def activate_staff(
     return staff_crud.activate_staff(db, staff)
 
 
-#customer management
-#list customers
+# customer management
+# list customers
 @router.get("/customers", response_model=list[CustomerUserResponse])
 def list_customers(
-    db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    db: Session = Depends(get_db), _: AdminUser = Depends(require_super_admin)
 ):
     return customer_user_crud.get_customers(db)
 
 
-#get customer detail
+# get customer detail
 @router.get("/customers/{customer_id}", response_model=CustomerUserResponse)
 def get_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin),
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 
@@ -885,28 +903,32 @@ def get_customer(
     return customer
 
 
-#update customer
+# update customer
 @router.patch("/customers/{customer_id}", response_model=CustomerUserResponse)
 def update_customer(
     customer_id: UUID,
     payload: CustomerUserUpdate,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin),
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    return customer_user_crud.update_customer(db, customer, payload.model_dump(exclude_unset=True))
+    return customer_user_crud.update_customer(
+        db, customer, payload.model_dump(exclude_unset=True)
+    )
 
 
-#deactivate customer
-@router.patch("/customers/{customer_id}/deactivate", response_model=CustomerUserResponse)
+# deactivate customer
+@router.patch(
+    "/customers/{customer_id}/deactivate", response_model=CustomerUserResponse
+)
 def deactivate_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin),
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 
@@ -916,12 +938,12 @@ def deactivate_customer(
     return customer_user_crud.deactivate_customer(db, customer)
 
 
-#activate customer
+# activate customer
 @router.patch("/customers/{customer_id}/activate", response_model=CustomerUserResponse)
 def activate_customer(
     customer_id: UUID,
     db: Session = Depends(get_db),
-    _: AdminUser = Depends(require_super_admin)
+    _: AdminUser = Depends(require_super_admin),
 ):
     customer = customer_user_crud.get_customer(db, customer_id)
 

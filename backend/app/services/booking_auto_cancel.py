@@ -17,7 +17,7 @@ def auto_cancel_expired_bookings(db: Session, expire_minutes: int = 30):
         .filter(
             Booking.status == "PROCESSING",
             Booking.payment_status == "PENDING",
-            Booking.created_at < threshold_time
+            Booking.created_at < threshold_time,
         )
         .all()
     )

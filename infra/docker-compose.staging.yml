@@ -1,0 +1,30 @@
+# Staging overrides - changes ports and volume names only
+# Use with: docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+
+services:
+  backend:
+    image: ${DOCKER_USERNAME}/airline-backend:${TAG:-latest}
+  
+  nginx:
+    ports:
+      - "8081:80"      # Staging uses port 8081 (production uses 8080)
+  
+  prometheus:
+    ports:
+      - "9091:9090"    # Staging uses port 9091 (production uses 9090)
+  
+  grafana:
+    ports:
+      - "3004:3000"    # Staging uses port 3004 (production uses 3003)
+
+volumes:
+  postgres_data:
+    name: staging_postgres_data
+  redis_data:
+    name: staging_redis_data
+  prometheus_data:
+    name: staging_prometheus_data
+  grafana_data:
+    name: staging_grafana_data
+  uploads_data:
+    name: staging_uploads_data

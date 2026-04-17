@@ -36,7 +36,6 @@ def create_admin(
     return admin
 
 
-
 def authenticate_admin(db: Session, email: str, password: str) -> AdminUser | None:
     admin = get_admin_by_email(db, email)
 
@@ -48,7 +47,7 @@ def authenticate_admin(db: Session, email: str, password: str) -> AdminUser | No
     if not admin.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account has been deactivated. Please contact the administrator."
+            detail="Your account has been deactivated. Please contact the administrator.",
         )
 
     # Password incorrect

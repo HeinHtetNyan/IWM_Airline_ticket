@@ -6,7 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from backend.app.auth.deps import get_current_admin_optional, get_current_customer
 from backend.app.auth.security import get_password_hash, verify_password
 from backend.app.auth.tokens import create_access_token
-from backend.app.crud.admin_auth import authenticate_admin, create_admin, get_admin_by_email
+from backend.app.crud.admin_auth import (
+    authenticate_admin,
+    create_admin,
+    get_admin_by_email,
+)
 from backend.app.core.config import settings
 from backend.app.db.deps import get_db
 from backend.app.models.admin_user import AdminUser
@@ -33,7 +37,10 @@ from backend.app.services.auth_token_service import (
     get_valid_auth_token,
     mark_token_used,
 )
-from backend.app.services.email_service import send_reset_password_email, send_verification_email
+from backend.app.services.email_service import (
+    send_reset_password_email,
+    send_verification_email,
+)
 from backend.app.services.rate_limit_service import enforce_email_rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -78,7 +85,9 @@ def customer_signup(
     verification_token = create_email_verification_token(db, user_id=user.id)
     background_tasks.add_task(send_verification_email, user.email, verification_token)
 
-    return Message(message="Signup successful. Please check your email to verify your account.")
+    return Message(
+        message="Signup successful. Please check your email to verify your account."
+    )
 
 
 @router.post("/customer/login", response_model=TokenOut)
@@ -98,7 +107,9 @@ def customer_login(
 
     user = db.query(CustomerUser).filter(CustomerUser.email == email).first()
     if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive")
     if not user.is_email_verified:
@@ -135,7 +146,9 @@ def customer_token(
 
     user = db.query(CustomerUser).filter(CustomerUser.email == email).first()
     if not user or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive")
     if not user.is_email_verified:
@@ -159,8 +172,12 @@ def verify_email(
     payload: VerifyEmailRequest,
     db: Session = Depends(get_db),
 ):
-    token_record = get_valid_auth_token(db, raw_token=payload.token, token_type=VERIFY_EMAIL)
-    user = db.query(CustomerUser).filter(CustomerUser.id == token_record.user_id).first()
+    token_record = get_valid_auth_token(
+        db, raw_token=payload.token, token_type=VERIFY_EMAIL
+    )
+    user = (
+        db.query(CustomerUser).filter(CustomerUser.id == token_record.user_id).first()
+    )
     if user is None:
         raise HTTPException(status_code=400, detail="Invalid token")
 
@@ -188,7 +205,9 @@ def resend_verification_email(
     user = db.query(CustomerUser).filter(CustomerUser.email == payload.email).first()
     if user and not user.is_email_verified:
         verification_token = create_email_verification_token(db, user_id=user.id)
-        background_tasks.add_task(send_verification_email, user.email, verification_token)
+        background_tasks.add_task(
+            send_verification_email, user.email, verification_token
+        )
 
     return Message(message="If the account exists, a verification email has been sent")
 
@@ -212,7 +231,9 @@ def forgot_password(
         reset_token = create_password_reset_token(db, user_id=user.id)
         background_tasks.add_task(send_reset_password_email, user.email, reset_token)
 
-    return Message(message="If the account exists, a password reset email has been sent")
+    return Message(
+        message="If the account exists, a password reset email has been sent"
+    )
 
 
 @router.post("/reset-password", response_model=Message)
@@ -220,8 +241,12 @@ def reset_password(
     payload: ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
-    token_record = get_valid_auth_token(db, raw_token=payload.token, token_type=RESET_PASSWORD)
-    user = db.query(CustomerUser).filter(CustomerUser.id == token_record.user_id).first()
+    token_record = get_valid_auth_token(
+        db, raw_token=payload.token, token_type=RESET_PASSWORD
+    )
+    user = (
+        db.query(CustomerUser).filter(CustomerUser.id == token_record.user_id).first()
+    )
     if user is None:
         raise HTTPException(status_code=400, detail="Invalid token")
 
@@ -274,7 +299,9 @@ def admin_signup(
 
     has_existing_admin = db.query(AdminUser.id).first() is not None
     if has_existing_admin and (not acting_admin or acting_admin.role != "SUPER_ADMIN"):
-        raise HTTPException(status_code=403, detail="Only super admins can create admin accounts")
+        raise HTTPException(
+            status_code=403, detail="Only super admins can create admin accounts"
+        )
 
     if has_existing_admin:
         role = payload.role if payload.role in ("STAFF", "SUPER_ADMIN") else "STAFF"
@@ -311,9 +338,14 @@ def admin_token(
         window_seconds=60,
         fail_open=False,
     )
-    admin = authenticate_admin(db, form_data.username.lower().strip(), form_data.password)
+    admin = authenticate_admin(
+        db, form_data.username.lower().strip(), form_data.password
+    )
     if not admin:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
 
     access_token = create_access_token(subject=str(admin.id), role=admin.role)
 

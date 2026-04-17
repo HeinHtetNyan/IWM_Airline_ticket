@@ -25,7 +25,9 @@ class BookingDeletionLog(Base):
         Index("idx_booking_deletion_logs_deleted_at", "deleted_at"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     booking_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     deleted_by: Mapped[str] = mapped_column(String(50), nullable=False)
     deleted_role: Mapped[str] = mapped_column(String(20), nullable=False)

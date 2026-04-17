@@ -6,10 +6,13 @@ from sqlalchemy.dialects.postgresql import UUID
 
 from backend.app.db.base import Base
 
+
 class CustomerUser(Base):
     __tablename__ = "customer_users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
 
     email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
@@ -17,8 +20,17 @@ class CustomerUser(Base):
     full_name: Mapped[str] = mapped_column(String, nullable=True)
     phone: Mapped[str] = mapped_column(String, nullable=True)
 
-    is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

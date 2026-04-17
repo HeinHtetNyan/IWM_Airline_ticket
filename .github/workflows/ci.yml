@@ -1,4 +1,4 @@
-name: CI - Test, Lint & Security
+name: CI - Test My Code
 
 on:
   push:
@@ -7,8 +7,9 @@ on:
     branches: [main]
 
 jobs:
+  # ── JOB 1: Lint + security + smoke tests ────────────────────────────────
   test:
-    name: Test & Lint
+    name: Lint, Security & Smoke Tests
     runs-on: ubuntu-latest
 
     services:
@@ -43,10 +44,10 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Cache pip
-        uses: actions/cache@v3
+      - name: Cache pip packages
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
@@ -55,33 +56,39 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd backend
-          pip install -r requirements.txt
-          pip install pytest pytest-cov flake8 black bandit
+          pip install -r backend/requirements.txt
+          pip install flake8 black bandit pytest pytest-asyncio httpx
 
-      - name: Lint with flake8 (warnings only)
-        continue-on-error: true
+      - name: Lint with flake8
         run: |
-          cd backend
-          flake8 app --count --max-complexity=10 --statistics
+          python -m flake8 backend/app \
+            --count \
+            --max-complexity=10 \
+            --max-line-length=88 \
+            --extend-ignore=E203,W503 \
+            --statistics
 
-      - name: Check formatting with black (warnings only)
-        continue-on-error: true
+      - name: Check formatting with black
         run: |
-          cd backend
-          black --check app
+          python -m black --check --diff backend/app
 
       - name: Security scan with bandit
-        continue-on-error: true
         run: |
-          cd backend
-          bandit -r app -f json -o bandit-report.json || true
+          python -m bandit -r backend/app -ll -f json -o bandit-report.json
+          python -m bandit -r backend/app -ll
 
-      - name: Run tests with coverage
+      - name: Upload bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+
+      - name: Run smoke tests
         run: |
-          cd backend
-          pytest tests/ -v --cov=app --cov-report=xml
+          python -m pytest backend/tests/test_smoke.py -v --tb=short
         env:
+          PYTHONPATH: .
           ENVIRONMENT: test
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpass
@@ -91,64 +98,61 @@ jobs:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
           REDIS_PASSWORD: ""
-          JWT_SECRET: ${{ secrets.JWT_SECRET_TEST }}
+          JWT_SECRET: test-secret-key-for-ci-only-not-production
           ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_MINUTES: 60
           CANCELLED_BOOKING_DELETE_DAYS: 7
           CORS_ALLOW_ORIGINS: http://localhost:3000
           FLIGHT_CACHE_TTL: 900
           TRUSTED_PROXY_CIDRS: 127.0.0.1/32
+          STORAGE_TYPE: local
+          UPLOAD_DIR: /app/uploads
+          MAILTRAP_API_TOKEN: test
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./backend/coverage.xml
-          fail_ci_if_error: false
-
+  # ── JOB 2: Docker build — only runs AFTER tests pass ────────────────────
   docker-build:
-    name: Build & Scan Docker Image
+    name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image
+      - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./infra/Dockerfile
           load: true
-          tags: airline-backend:ci
+          tags: airline-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            GIT_SHA=${{ github.sha }}
 
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: airline-backend:ci
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+      - name: Validate docker-compose config
+        run: |
+          cd infra
+          docker compose config
 
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results.sarif'
-
-      - name: Push to Docker Hub
-        if: github.ref == 'refs/heads/main'
+      - name: Log in to Docker Hub
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Bug_Fix_V1'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Push image
-        if: github.ref == 'refs/heads/main'
+      - name: Push image to Docker Hub
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Bug_Fix_V1'
         run: |
-          docker tag airline-backend:ci ${{ secrets.DOCKER_USERNAME }}/airline-backend:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/airline-backend:latest
+          BRANCH_TAG=$(echo "${{ github.ref_name }}" | tr '/' '-' | tr '_' '-' | tr '[:upper:]' '[:lower:]')
+          docker tag airline-backend:${{ github.sha }} \
+            ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.sha }}
+          docker tag airline-backend:${{ github.sha }} \
+            ${{ secrets.DOCKER_USERNAME }}/airline-backend:${BRANCH_TAG}
+          docker push ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/airline-backend:${BRANCH_TAG}

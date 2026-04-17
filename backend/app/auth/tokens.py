@@ -11,7 +11,9 @@ class TokenExpiredError(JWTError):
     """Raised when an access token is structurally valid but expired."""
 
 
-def create_access_token(subject: str, role: str, expires_minutes: Optional[int] = None) -> str:
+def create_access_token(
+    subject: str, role: str, expires_minutes: Optional[int] = None
+) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )

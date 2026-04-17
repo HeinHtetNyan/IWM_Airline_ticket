@@ -29,7 +29,6 @@ def get_staff(db: Session, staff_id: UUID):
     )
 
 
-
 def update_staff(db: Session, staff: AdminUser, data: dict):
     if "email" in data and data["email"] is not None:
         data["email"] = str(data["email"]).strip().lower()

@@ -18,19 +18,25 @@ def _to_decimal(value: Any, *, field: str) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
-        raise HTTPException(status_code=400, detail=f"Invalid {field} in flight_snapshot")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field} in flight_snapshot"
+        )
 
 
 def _get_exchange_rate(db: Session) -> Decimal:
     exchange = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
     if not exchange or exchange.usd_to_mmk <= 0:
-        raise HTTPException(status_code=500, detail="System configuration error: exchange rate not set")
+        raise HTTPException(
+            status_code=500, detail="System configuration error: exchange rate not set"
+        )
     return Decimal(str(exchange.usd_to_mmk))
 
 
 def _get_markup_price(base_price_usd: Decimal, markup_percentage: Decimal) -> Decimal:
     # VERIFIED: markup applied once at pricing calculation
-    return _quantize_money(base_price_usd * (Decimal("1") + (markup_percentage / Decimal("100"))))
+    return _quantize_money(
+        base_price_usd * (Decimal("1") + (markup_percentage / Decimal("100")))
+    )
 
 
 def _get_override_price(
@@ -39,7 +45,9 @@ def _get_override_price(
     flight_number: str | None,
     departure_date: date | None,
 ) -> Decimal | None:
-    override = get_active_price_override(db, airline_code, flight_number, departure_date)
+    override = get_active_price_override(
+        db, airline_code, flight_number, departure_date
+    )
     if override is None:
         return None
     return _quantize_money(Decimal(str(override.override_price_usd)))
@@ -53,7 +61,9 @@ def _calc_final_price(
     departure_date: date | None,
     markup_percentage: Decimal,
 ) -> Decimal:
-    override_price_usd = _get_override_price(db, airline_code, flight_number, departure_date)
+    override_price_usd = _get_override_price(
+        db, airline_code, flight_number, departure_date
+    )
     if override_price_usd is not None:
         return override_price_usd
     return _get_markup_price(base_price_usd, markup_percentage)
@@ -76,14 +86,22 @@ def _extract_departure_date(value: str | None) -> datetime | None:
         return None
 
 
-def _resolve_flight_override_keys(flight: dict[str, Any]) -> tuple[str | None, str | None, date | None]:
+def _resolve_flight_override_keys(
+    flight: dict[str, Any],
+) -> tuple[str | None, str | None, date | None]:
     departure_time = _extract_departure_date(flight.get("departure_time"))
     if departure_time is None:
         return None, None, None
-    return flight.get("airline_code"), flight.get("flight_number"), departure_time.date()
+    return (
+        flight.get("airline_code"),
+        flight.get("flight_number"),
+        departure_time.date(),
+    )
 
 
-def apply_pricing_logic(db: Session, api_flights: list[dict[str, Any]], adults: int = 1) -> list[dict[str, Any]]:
+def apply_pricing_logic(
+    db: Session, api_flights: list[dict[str, Any]], adults: int = 1
+) -> list[dict[str, Any]]:
     usd_to_mmk = _get_exchange_rate(db)
     markup_percentage = get_global_markup(db)
     final_flights: list[dict[str, Any]] = []
@@ -94,7 +112,9 @@ def apply_pricing_logic(db: Session, api_flights: list[dict[str, Any]], adults: 
         except (KeyError, InvalidOperation, TypeError, ValueError):
             continue
 
-        airline_code, flight_number, departure_date = _resolve_flight_override_keys(flight)
+        airline_code, flight_number, departure_date = _resolve_flight_override_keys(
+            flight
+        )
 
         final_price_per_pax_usd = _calc_final_price(
             db,
@@ -111,17 +131,27 @@ def apply_pricing_logic(db: Session, api_flights: list[dict[str, Any]], adults: 
         flight["adults"] = adults
         flight["final_price_usd"] = float(total_price_usd)
         flight["final_price_mmk"] = float(total_price_mmk)
-        flight["price_estimate_min_usd"] = float(_quantize_money(total_price_usd * Decimal("0.9")))
-        flight["price_estimate_max_usd"] = float(_quantize_money(total_price_usd * Decimal("1.1")))
-        flight["price_estimate_min_mmk"] = float(_quantize_money(Decimal(str(flight["price_estimate_min_usd"])) * usd_to_mmk))
-        flight["price_estimate_max_mmk"] = float(_quantize_money(Decimal(str(flight["price_estimate_max_usd"])) * usd_to_mmk))
+        flight["price_estimate_min_usd"] = float(
+            _quantize_money(total_price_usd * Decimal("0.9"))
+        )
+        flight["price_estimate_max_usd"] = float(
+            _quantize_money(total_price_usd * Decimal("1.1"))
+        )
+        flight["price_estimate_min_mmk"] = float(
+            _quantize_money(Decimal(str(flight["price_estimate_min_usd"])) * usd_to_mmk)
+        )
+        flight["price_estimate_max_mmk"] = float(
+            _quantize_money(Decimal(str(flight["price_estimate_max_usd"])) * usd_to_mmk)
+        )
         flight["requires_admin_confirmation"] = True
         final_flights.append(flight)
 
     return final_flights
 
 
-def apply_round_trip_pricing_logic(db: Session, bundles: list[dict[str, Any]], adults: int = 1) -> list[dict[str, Any]]:
+def apply_round_trip_pricing_logic(
+    db: Session, bundles: list[dict[str, Any]], adults: int = 1
+) -> list[dict[str, Any]]:
     usd_to_mmk = _get_exchange_rate(db)
     markup_percentage = get_global_markup(db)
     final_results: list[dict[str, Any]] = []
@@ -148,10 +178,18 @@ def apply_round_trip_pricing_logic(db: Session, bundles: list[dict[str, Any]], a
                 "base_price_usd": float(_quantize_money(base_price_usd)),
                 "final_price_usd": float(total_price_usd),
                 "final_price_mmk": float(total_price_mmk),
-                "price_estimate_min_usd": float(_quantize_money(total_price_usd * Decimal("0.9"))),
-                "price_estimate_max_usd": float(_quantize_money(total_price_usd * Decimal("1.1"))),
-                "price_estimate_min_mmk": float(_quantize_money(total_price_mmk * Decimal("0.9"))),
-                "price_estimate_max_mmk": float(_quantize_money(total_price_mmk * Decimal("1.1"))),
+                "price_estimate_min_usd": float(
+                    _quantize_money(total_price_usd * Decimal("0.9"))
+                ),
+                "price_estimate_max_usd": float(
+                    _quantize_money(total_price_usd * Decimal("1.1"))
+                ),
+                "price_estimate_min_mmk": float(
+                    _quantize_money(total_price_mmk * Decimal("0.9"))
+                ),
+                "price_estimate_max_mmk": float(
+                    _quantize_money(total_price_mmk * Decimal("1.1"))
+                ),
                 "requires_admin_confirmation": True,
             }
         )

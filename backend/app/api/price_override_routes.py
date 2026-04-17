@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session
 from backend.app.auth.deps import require_super_admin
 from backend.app.db.deps import get_db
 from backend.app.models.admin_user import AdminUser
-from backend.app.schemas.price_override import PriceOverrideCreate, PriceOverrideResponse
+from backend.app.schemas.price_override import (
+    PriceOverrideCreate,
+    PriceOverrideResponse,
+)
 from backend.app.services.price_override_service import (
     create_price_override,
     deactivate_price_override,

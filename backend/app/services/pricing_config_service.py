@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from backend.app.models.pricing_config import PricingConfig
 
-
 DEFAULT_GLOBAL_MARKUP_PERCENTAGE = 15.0
 
 
@@ -14,7 +13,9 @@ def _get_or_create_pricing_config(db: Session) -> PricingConfig:
     if config:
         return config
 
-    config = PricingConfig(id=1, global_markup_percentage=DEFAULT_GLOBAL_MARKUP_PERCENTAGE)
+    config = PricingConfig(
+        id=1, global_markup_percentage=DEFAULT_GLOBAL_MARKUP_PERCENTAGE
+    )
     db.add(config)
     try:
         db.commit()

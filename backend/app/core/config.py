@@ -122,8 +122,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_environment(self) -> "Settings":
-        if self.ENVIRONMENT.lower() in {"production", "prod"} and "*" in self.cors_origins:
-            raise ValueError("CORS wildcard '*' is not allowed when ENVIRONMENT=production")
+        if (
+            self.ENVIRONMENT.lower() in {"production", "prod"}
+            and "*" in self.cors_origins
+        ):
+            raise ValueError(
+                "CORS wildcard '*' is not allowed when ENVIRONMENT=production"
+            )
 
         return self
 

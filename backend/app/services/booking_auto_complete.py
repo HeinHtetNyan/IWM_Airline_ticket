@@ -10,6 +10,7 @@ from backend.app.models.booking import Booking
 
 logger = logging.getLogger(__name__)
 
+
 def _to_utc(dt_str: str, tz_name: str) -> datetime:
     parsed = datetime.fromisoformat(dt_str)
     if parsed.tzinfo is None:
@@ -26,7 +27,9 @@ def auto_complete_bookings(db: Session):
         try:
             snapshot = json.loads(booking.flight_snapshot)
         except Exception:
-            logger.exception("Failed to parse flight_snapshot for booking %s", booking.id)
+            logger.exception(
+                "Failed to parse flight_snapshot for booking %s", booking.id
+            )
             continue
 
         if booking.type == "ONE_WAY":
@@ -43,11 +46,16 @@ def auto_complete_bookings(db: Session):
                     booking.status_updated_at = now_utc
                     completed_count += 1
             except Exception:
-                logger.exception("Failed to auto-complete one-way booking %s", booking.id)
+                logger.exception(
+                    "Failed to auto-complete one-way booking %s", booking.id
+                )
                 continue
 
         elif booking.type == "ROUND_TRIP":
-            for leg_name, flag in (("outbound", "outbound_completed"), ("inbound", "inbound_completed")):
+            for leg_name, flag in (
+                ("outbound", "outbound_completed"),
+                ("inbound", "inbound_completed"),
+            ):
                 leg = snapshot.get(leg_name) or {}
                 if getattr(booking, flag):
                     continue

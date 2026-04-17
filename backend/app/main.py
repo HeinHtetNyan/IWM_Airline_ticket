@@ -20,14 +20,15 @@ from backend.app.core.redis import redis_client
 from backend.app.services.booking_auto_cancel import auto_cancel_expired_bookings
 from backend.app.services.booking_auto_complete import auto_complete_bookings
 from backend.app.services.booking_deletion import auto_delete_expired_cancelled_bookings
-from backend.app.services.price_override_service import deactivate_expired_price_overrides
-
-
+from backend.app.services.price_override_service import (
+    deactivate_expired_price_overrides,
+)
 
 # PROMETHEUS IMPORTS
 # ============================================
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
+
     # Import custom metrics from separate file to avoid duplicates
     from backend.app.metrics import (
         bookings_created_total,
@@ -48,14 +49,12 @@ logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
 _LIFECYCLE_LOCK_KEY = "locks:lifecycle_job"
 _LIFECYCLE_LOCK_TTL_SECONDS = 240
-_RELEASE_LIFECYCLE_LOCK_SCRIPT = redis_client.register_script(
-    """
+_RELEASE_LIFECYCLE_LOCK_SCRIPT = redis_client.register_script("""
     if redis.call("GET", KEYS[1]) == ARGV[1] then
         return redis.call("DEL", KEYS[1])
     end
     return 0
-    """
-)
+    """)
 
 
 def lifecycle_job():
@@ -73,11 +72,15 @@ def lifecycle_job():
                 )
             )
         except Exception:
-            logger.exception("[LIFECYCLE ERROR] Failed to acquire distributed lifecycle lock")
+            logger.exception(
+                "[LIFECYCLE ERROR] Failed to acquire distributed lifecycle lock"
+            )
             return
 
         if not lock_acquired:
-            logger.info("[LIFECYCLE] Skipping run because another instance holds the job lock")
+            logger.info(
+                "[LIFECYCLE] Skipping run because another instance holds the job lock"
+            )
             return
 
         cancel_result = auto_cancel_expired_bookings(
@@ -110,7 +113,9 @@ def lifecycle_job():
                     args=[lock_value],
                 )
             except Exception:
-                logger.exception("[LIFECYCLE WARNING] Failed to release distributed lifecycle lock")
+                logger.exception(
+                    "[LIFECYCLE WARNING] Failed to release distributed lifecycle lock"
+                )
         db.close()
 
 
@@ -203,7 +208,6 @@ else:
 print("✅ Prometheus metrics enabled")
 
 
-
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -216,6 +220,7 @@ app.add_middleware(
 
 # Routers
 app.include_router(api_router, prefix="/api")
+
 
 # Root endpoint
 @app.get("/")
@@ -230,5 +235,5 @@ def health_check():
         "status": "ok",
         "timestamp": datetime.now().isoformat(),
         "service": "airline-backend",
-        "version": "1.0.0"
+        "version": "1.0.0",
     }

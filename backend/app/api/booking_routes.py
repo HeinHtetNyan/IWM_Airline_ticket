@@ -75,13 +75,17 @@ def _acquire_duplicate_booking_lock(
     db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
 
 
-def _require_non_empty_str(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
+def _require_non_empty_str(
+    data: dict, field: str, errors: list[str], *, prefix: str = ""
+) -> None:
     value = data.get(field)
     if not isinstance(value, str) or not value.strip():
         errors.append(f"{prefix}{field} must be a non-empty string")
 
 
-def _require_numeric(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
+def _require_numeric(
+    data: dict, field: str, errors: list[str], *, prefix: str = ""
+) -> None:
     value = data.get(field)
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         errors.append(f"{prefix}{field} must be a valid number")
@@ -90,7 +94,9 @@ def _require_numeric(data: dict, field: str, errors: list[str], *, prefix: str =
         errors.append(f"{prefix}{field} must be greater than 0")
 
 
-def _require_iso_datetime(data: dict, field: str, errors: list[str], *, prefix: str = "") -> None:
+def _require_iso_datetime(
+    data: dict, field: str, errors: list[str], *, prefix: str = ""
+) -> None:
     value = data.get(field)
     if not isinstance(value, str) or not value.strip():
         errors.append(f"{prefix}{field} must be a non-empty string")
@@ -98,13 +104,17 @@ def _require_iso_datetime(data: dict, field: str, errors: list[str], *, prefix: 
     try:
         datetime.fromisoformat(value)
     except (ValueError, TypeError):
-        errors.append(f"{prefix}{field} must be a valid ISO datetime (e.g. 2025-06-01T10:00:00)")
+        errors.append(
+            f"{prefix}{field} must be a valid ISO datetime (e.g. 2025-06-01T10:00:00)"
+        )
 
 
 def _validate_snapshot(payload: BookingCreate) -> dict:
     snapshot = payload.flight_snapshot
     if not isinstance(snapshot, dict):
-        raise HTTPException(status_code=400, detail="flight_snapshot must be a JSON object")
+        raise HTTPException(
+            status_code=400, detail="flight_snapshot must be a JSON object"
+        )
 
     errors: list[str] = []
     _require_numeric(snapshot, "base_price_usd", errors)
@@ -124,7 +134,9 @@ def _validate_snapshot(payload: BookingCreate) -> dict:
                 _require_non_empty_str(leg, field, errors, prefix=f"{leg_name}.")
 
     if errors:
-        raise HTTPException(status_code=400, detail=f"Invalid flight_snapshot: {', '.join(errors)}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid flight_snapshot: {', '.join(errors)}"
+        )
 
     return snapshot
 
@@ -160,7 +172,9 @@ def create_booking(
         canonical_snapshot=canonical_snapshot,
     )
 
-    duplicate_cutoff = datetime.now(timezone.utc) - timedelta(seconds=_DUPLICATE_BOOKING_WINDOW_SECONDS)
+    duplicate_cutoff = datetime.now(timezone.utc) - timedelta(
+        seconds=_DUPLICATE_BOOKING_WINDOW_SECONDS
+    )
     duplicate_filters = [
         Booking.customer_id == current_user.id,
         Booking.status == "PROCESSING",
@@ -175,7 +189,10 @@ def create_booking(
     existing = db.query(Booking).filter(*duplicate_filters).first()
     if existing:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Duplicate booking detected. Please wait a few seconds.")
+        raise HTTPException(
+            status_code=400,
+            detail="Duplicate booking detected. Please wait a few seconds.",
+        )
 
     booking = Booking(
         customer_id=current_user.id,
@@ -195,7 +212,7 @@ def create_booking(
     # Record booking metrics
     bookings_created_total.inc()
     booking_duration_seconds.observe(time.time() - start_time)
-    
+
     return CustomerBookingOut(
         booking_id=booking.id,
         booking_code=None,
@@ -230,13 +247,19 @@ def add_passengers(
         raise HTTPException(status_code=404, detail="Booking not found")
 
     if booking.status in {"CANCELLED", "COMPLETED"}:
-        raise HTTPException(status_code=400, detail="Cannot add passengers to this booking status")
+        raise HTTPException(
+            status_code=400, detail="Cannot add passengers to this booking status"
+        )
 
     if db.query(Passenger).filter(Passenger.booking_id == booking_id).first():
-        raise HTTPException(status_code=400, detail="Passengers already added for this booking.")
+        raise HTTPException(
+            status_code=400, detail="Passengers already added for this booking."
+        )
 
     if len(payload.passengers) != booking.adults:
-        raise HTTPException(status_code=400, detail=f"Passenger count must be {booking.adults}")
+        raise HTTPException(
+            status_code=400, detail=f"Passenger count must be {booking.adults}"
+        )
 
     for p in payload.passengers:
         db.add(
@@ -262,7 +285,9 @@ def add_passengers(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Concurrent update detected. Please retry.")
+        raise HTTPException(
+            status_code=409, detail="Concurrent update detected. Please retry."
+        )
 
     return db.query(Passenger).filter(Passenger.booking_id == booking_id).all()
 
@@ -278,7 +303,9 @@ def list_my_bookings(
         db.query(Booking)
         .filter(Booking.customer_id == current_user.id)
         .order_by(Booking.created_at.desc())
-        .offset(offset).limit(limit).all()
+        .offset(offset)
+        .limit(limit)
+        .all()
     )
 
     return [
@@ -307,10 +334,16 @@ def get_my_booking_detail(
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
 ):
-    booking = db.query(Booking).filter(Booking.id == booking_id, Booking.customer_id == current_user.id).first()
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id, Booking.customer_id == current_user.id)
+        .first()
+    )
 
     if not booking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found"
+        )
 
     passengers = db.query(Passenger).filter(Passenger.booking_id == booking_id).all()
 
