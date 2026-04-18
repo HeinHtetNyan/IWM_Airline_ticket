@@ -15,6 +15,8 @@ from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_MAX_EMAIL_RETRIES = 3
+
 _templates_dir = Path(__file__).resolve().parent.parent / "templates"
 _template_env = Environment(
     loader=FileSystemLoader(str(_templates_dir)),
@@ -137,12 +139,12 @@ def send_email(
 ) -> None:
     html_content = render_template(template_name, context)
     
-    for attempt in range(1, max_retries + 1):
+    for attempt in range(1, _MAX_EMAIL_RETRIES + 1):
         try:
             email_backend.send(recipient=recipient, subject=subject, html_content=html_content)
             return
         except Exception as e:
-            if attempt == max_retries:
+            if attempt == _MAX_EMAIL_RETRIES:
                 logger.error("Final attempt failed to send email to %s: %s", recipient, e)
                 raise
             sleep_time = attempt * 2
