@@ -81,7 +81,7 @@ jobs:
           TRUSTED_PROXY_CIDRS: 127.0.0.1/32
           TICKET_API_KEY: "test-ticket-api-key"
           STORAGE_TYPE: local
-          UPLOAD_DIR: /app/uploads
+          UPLOAD_DIR: ./uploads
 
       - name: Test Docker build
         run: |
