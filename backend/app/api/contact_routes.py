@@ -32,7 +32,7 @@ def get_my_contact(
 
 
 @router.put("/me", response_model=ContactOut)
-def update_my_contact(
+def update_contact_me(
     payload: ContactUpdate,
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
