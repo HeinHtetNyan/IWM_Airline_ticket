@@ -9,6 +9,8 @@ from .customer_user import CustomerUser
 from .exchange_rate import ExchangeRate
 from .price_override import PriceOverride
 from .pricing_config import PricingConfig
+from .website_background import WebsiteBackground
+from .website_banner import WebsiteBanner
 
 __all__ = [
     "AdminUser",
@@ -22,4 +24,6 @@ __all__ = [
     "ExchangeRate",
     "PriceOverride",
     "PricingConfig",
+    "WebsiteBackground",
+    "WebsiteBanner",
 ]
