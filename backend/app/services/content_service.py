@@ -1,13 +1,73 @@
 import json
-from uuid import UUID
+import os
+from uuid import UUID, uuid4
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.redis import redis_client
 from backend.app.models.website_background import WebsiteBackground
 from backend.app.models.website_banner import WebsiteBanner
 from backend.app.schemas.content_schema import BackgroundUpdate, BannerCreate, BannerUpdate
+from backend.app.services.storage_service import get_storage
+
+_ALLOWED_CONTENT_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_CONTENT_IMAGE_MAX_BYTES = 5 * 1024 * 1024  # 5MB
+_CONTENT_IMAGE_SIGNATURES: dict[str, list[bytes]] = {
+    "image/jpeg": [b"\xff\xd8\xff"],
+    "image/png": [b"\x89PNG\r\n\x1a\n"],
+    # WebP container starts with "RIFF" at bytes 0-3, "WEBP" at bytes 8-11
+    "image/webp": [b"RIFF"],
+}
+
+
+async def save_content_image(file: UploadFile) -> str:
+    if file.content_type not in _ALLOWED_CONTENT_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Allowed: image/jpeg, image/png, image/webp",
+        )
+
+    await file.seek(0)
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    await file.seek(0)
+
+    if file_size > _CONTENT_IMAGE_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum size is 5MB",
+        )
+
+    header = await file.read(16)
+    await file.seek(0)
+
+    expected_signatures = _CONTENT_IMAGE_SIGNATURES.get(file.content_type or "")
+    if not expected_signatures or not any(
+        header.startswith(sig) for sig in expected_signatures
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File content does not match the declared file type",
+        )
+
+    extension = ""
+    if file.filename and "." in file.filename:
+        extension = f".{file.filename.rsplit('.', 1)[-1].lower()}"
+
+    path = f"public/content/{uuid4().hex}{extension}"
+
+    storage = get_storage()
+    try:
+        image_url = await storage.save(file, path)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Storage failure",
+        ) from exc
+
+    return image_url
+
 
 _MAX_ACTIVE_BANNERS = 8
 _BANNERS_CACHE_KEY = "content:banners:active"

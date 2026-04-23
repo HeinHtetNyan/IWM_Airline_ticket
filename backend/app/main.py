@@ -8,6 +8,7 @@ from uuid import uuid4
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import OperationalError
 
 from backend.app.api.router import api_router
@@ -179,6 +180,9 @@ app = FastAPI(
 
 if settings.STORAGE_TYPE.lower() == "local":
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    public_dir = Path(settings.UPLOAD_DIR) / "public"
+    public_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/files/public", StaticFiles(directory=str(public_dir)), name="public_files")
 
 
 # PROMETHEUS METRICS SETUP -
