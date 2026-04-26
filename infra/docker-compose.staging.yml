@@ -1,21 +1,33 @@
-# Staging overrides - changes ports and volume names only
-# Use with: docker compose -f docker-compose.yml -f docker-compose.staging.yml up
-
+# Staging overrides
+# Differences from base: uses pre-built image, staging ports, staging named volumes
 services:
   backend:
-    image: ${DOCKER_USERNAME}/airline-backend:${TAG:-latest}
-  
+    build: !reset null
+    image: flyqm/air_ticket:${TAG}
+    env_file:
+      - ../.env.staging
+    volumes:
+      - uploads_data:/app/uploads
+
+  db:
+    ports:
+      - "5434:5432"
+
   nginx:
     ports:
-      - "8081:80"      # Staging uses port 8081 (production uses 8080)
-  
+      - "8081:80"
+
   prometheus:
     ports:
-      - "9091:9090"    # Staging uses port 9091 (production uses 9090)
-  
+      - "9091:9090"
+
   grafana:
     ports:
-      - "3004:3000"    # Staging uses port 3004 (production uses 3003)
+      - "3004:3000"
+
+  test_runner:
+    profiles:
+      - never
 
 volumes:
   postgres_data:
@@ -28,3 +40,5 @@ volumes:
     name: staging_grafana_data
   uploads_data:
     name: staging_uploads_data
+  test_results:
+    name: staging_test_results

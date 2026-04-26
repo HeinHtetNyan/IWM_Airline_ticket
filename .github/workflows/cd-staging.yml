@@ -2,117 +2,85 @@ name: CD - Deploy to Staging
 
 on:
   workflow_run:
-    workflows: ["CI - Test My Code"]
+    workflows: ["CI - Test  Code"]   
     branches: [Bug_Fix_V1]
     types: [completed]
 
 jobs:
   deploy-staging:
-    name: Deploy to Staging Server
+    name: Deploy to Staging
     runs-on: ubuntu-latest
     environment: staging
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Confirm image exists on Docker Hub
-        run: |
-          docker pull ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.event.workflow_run.head_sha }}
-          echo "Image confirmed: ${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.event.workflow_run.head_sha }}"
-
-      - name: Deploy to staging via SSH
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_HOST }}
-          port: 10317
+          port: 22
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
 
-            echo "=== Starting staging deployment ==="
+            IMAGE="flyqm/air_ticket:${{ github.event.workflow_run.head_sha }}"
+            DEPLOY_DIR="/home/devuser/staging"
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging --project-name airline-staging"
 
-            cd /home/${{ secrets.SERVER_USER }}/staging
+            echo ">>> Deploying $IMAGE to staging"
+            cd "$DEPLOY_DIR"
 
-            # Pull latest code safely (never fails on local changes)
+            # Pull latest code from Bug_Fix_V1
             git fetch origin Bug_Fix_V1
             git reset --hard origin/Bug_Fix_V1
 
-            # Set the new image tag
-            NEW_IMAGE="${{ secrets.DOCKER_USERNAME }}/airline-backend:${{ github.event.workflow_run.head_sha }}"
+            # Pull the new image that CI just built and pushed
+            docker pull "$IMAGE"
 
-            # Pull the pre-built tested image from Docker Hub
-            docker pull "$NEW_IMAGE"
+            # Remember what image is currently running (for rollback)
+            PREVIOUS_IMAGE=$(docker inspect airline-staging-backend-1 --format='{{.Config.Image}}' 2>/dev/null || echo "")
+            echo "Previous: $PREVIOUS_IMAGE"
+            echo "New:      $IMAGE"
 
-            # Save current running image for rollback
-            CURRENT_CONTAINER=$(docker compose -f infra/docker-compose.yml -f infra/docker-compose.staging.yml ps -q backend 2>/dev/null || echo "")
-            if [ -n "$CURRENT_CONTAINER" ]; then
-              PREVIOUS_IMAGE=$(docker inspect --format='{{index .Config.Image}}' "$CURRENT_CONTAINER" 2>/dev/null || echo "")
-            else
-              PREVIOUS_IMAGE=""
-            fi
-            echo "Previous image: $PREVIOUS_IMAGE"
-            echo "New image: $NEW_IMAGE"
+            # Start db and redis first if not already running
+            TAG=${{ github.event.workflow_run.head_sha }} \
+            $COMPOSE up -d db redis
 
-            # Update image tag in staging compose file
-            sed -i "s|image: .*/airline-backend:.*|image: $NEW_IMAGE|" infra/docker-compose.staging.yml
+            # Wait for db and redis to be healthy
+            sleep 10
 
-            # Run database migrations using new image before starting
-            docker run --rm \
-              --network host \
-              --env-file /home/${{ secrets.SERVER_USER }}/staging/.env.staging \
-              "$NEW_IMAGE" \
-              alembic upgrade head
+            # Deploy the new backend (only restarts backend, leaves db+redis alone)
+            TAG=${{ github.event.workflow_run.head_sha }} \
+            $COMPOSE up -d --no-deps --no-build backend nginx
 
-            # Deploy - restart only backend, keep DB and Redis running
-            cd infra
-            docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.staging.yml \
-              --env-file ../.env.staging \
-              --project-name airline-staging \
-              up -d --no-deps --no-build backend
-
-            # Health check retry loop - 60 seconds total
-            echo "Waiting for staging to become healthy..."
+            # Health check — try 30 times with 2 second gaps = 60 seconds total
+            echo ">>> Checking staging health..."
             HEALTHY=false
             for i in $(seq 1 30); do
               if curl -sf http://localhost:8081/api/health > /dev/null 2>&1; then
-                echo "Staging is healthy after attempt $i"
+                echo "Healthy after $i attempts!"
                 HEALTHY=true
                 break
               fi
-              echo "Attempt $i/30 - not ready, waiting 2s..."
+              echo "  Attempt $i/30 not ready yet, waiting..."
               sleep 2
             done
 
-            # Rollback if health check failed
+            # If still not healthy after 60 seconds, roll back
             if [ "$HEALTHY" = "false" ]; then
-              echo "Health check failed - rolling back staging..."
+              echo ">>> Health check failed! Rolling back..."
               if [ -n "$PREVIOUS_IMAGE" ]; then
-                sed -i "s|image: .*/airline-backend:.*|image: $PREVIOUS_IMAGE|" docker-compose.staging.yml
-                docker compose \
-                  -f docker-compose.yml \
-                  -f docker-compose.staging.yml \
-                  --env-file ../.env.staging \
-                  --project-name airline-staging \
-                  up -d --no-deps --no-build backend
-                echo "Rolled back to: $PREVIOUS_IMAGE"
+                PREV_TAG="${PREVIOUS_IMAGE##*:}"
+                TAG="$PREV_TAG" $COMPOSE up -d --no-deps --no-build backend nginx
+                echo "Rolled back to $PREVIOUS_IMAGE"
               else
-                echo "No previous image - cannot rollback"
+                echo "No previous image found, cannot roll back"
               fi
-              docker compose -f docker-compose.yml -f docker-compose.staging.yml logs --tail=50 backend
+              $COMPOSE logs --tail=50 backend
               exit 1
             fi
 
-            # Cleanup old images
+            # Clean up images older than 72 hours
             docker image prune -f --filter "until=72h"
-            echo "=== Staging deployment complete: $NEW_IMAGE ==="
+            echo ">>> Staging deployment done: $IMAGE"
