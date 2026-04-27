@@ -168,7 +168,6 @@ def send_verification_email(email: str, token: str) -> None:
             template_name="verification_email.html",
             context={
                 "action_url": _verification_url(token),
-                "token": token,
             },
         )
     except Exception:
@@ -184,7 +183,6 @@ def send_reset_password_email(email: str, token: str) -> None:
             template_name="reset_password_email.html",
             context={
                 "action_url": _reset_password_url(token),
-                "token": token,
             },
         )
     except Exception:
