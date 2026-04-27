@@ -9,7 +9,6 @@ from backend.app.db.deps import get_db
 from backend.app.models.admin_user import AdminUser
 from backend.app.schemas.content_schema import (
     BackgroundResponse,
-    BackgroundUpdate,
     BannerCreate,
     BannerResponse,
     BannerUpdate,
@@ -17,11 +16,12 @@ from backend.app.schemas.content_schema import (
 from backend.app.services.content_service import (
     create_banner,
     deactivate_banner,
+    delete_banner,
     get_active_banners,
     get_background,
+    replace_background,
     save_content_image,
     update_banner,
-    upsert_background,
 )
 
 router = APIRouter(prefix="/content", tags=["Content"])
@@ -40,8 +40,7 @@ async def write_background(
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_super_admin),
 ):
-    image_url = await save_content_image(file)
-    return upsert_background(db, BackgroundUpdate(image_url=image_url))
+    return await replace_background(db, file)
 
 
 # Banners
@@ -105,3 +104,12 @@ def deactivate_existing_banner(
     admin: AdminUser = Depends(require_super_admin),
 ):
     return deactivate_banner(db, banner_id)
+
+
+@router.delete("/banners/{banner_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_existing_banner(
+    banner_id: UUID,
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_super_admin),
+):
+    await delete_banner(db, banner_id)

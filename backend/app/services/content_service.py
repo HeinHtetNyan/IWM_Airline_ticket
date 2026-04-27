@@ -97,6 +97,31 @@ def upsert_background(db: Session, payload: BackgroundUpdate) -> WebsiteBackgrou
     db.refresh(bg)
     return bg
 
+
+def _url_to_storage_path(url: str) -> str | None:
+    idx = url.find("public/content/")
+    if idx == -1:
+        return None
+    return url[idx:]
+
+
+async def replace_background(db: Session, file: UploadFile) -> WebsiteBackground:
+    old_bg = db.query(WebsiteBackground).filter(WebsiteBackground.id == 1).first()
+    old_url = old_bg.image_url if old_bg else None
+
+    image_url = await save_content_image(file)
+    result = upsert_background(db, BackgroundUpdate(image_url=image_url))
+
+    if old_url:
+        path = _url_to_storage_path(old_url)
+        if path:
+            try:
+                await get_storage().delete(path)
+            except Exception:
+                pass
+
+    return result
+
 # Banners
 
 def _invalidate_banners_cache() -> None:
@@ -223,3 +248,24 @@ def deactivate_banner(db: Session, banner_id: UUID) -> WebsiteBanner:
     db.refresh(banner)
     _invalidate_banners_cache()
     return banner
+
+
+async def delete_banner(db: Session, banner_id: UUID) -> None:
+    banner = db.query(WebsiteBanner).filter(WebsiteBanner.id == banner_id).first()
+    if not banner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Banner not found",
+        )
+
+    old_url = banner.image_url
+    db.delete(banner)
+    db.commit()
+    _invalidate_banners_cache()
+
+    path = _url_to_storage_path(old_url)
+    if path:
+        try:
+            await get_storage().delete(path)
+        except Exception:
+            pass
