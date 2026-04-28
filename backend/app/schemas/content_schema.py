@@ -27,6 +27,11 @@ class BannerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class BannerDeleteResponse(BaseModel):
+    message: str
+    banner_id: UUID
+
+
 class BannerCreate(BaseModel):
     title: str
     image_url: str

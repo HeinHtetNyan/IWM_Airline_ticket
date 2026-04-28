@@ -10,6 +10,7 @@ from backend.app.models.admin_user import AdminUser
 from backend.app.schemas.content_schema import (
     BackgroundResponse,
     BannerCreate,
+    BannerDeleteResponse,
     BannerResponse,
     BannerUpdate,
 )
@@ -106,10 +107,14 @@ def deactivate_existing_banner(
     return deactivate_banner(db, banner_id)
 
 
-@router.delete("/banners/{banner_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/banners/{banner_id}/permanent", response_model=BannerDeleteResponse)
 async def delete_existing_banner(
     banner_id: UUID,
     db: Session = Depends(get_db),
     admin: AdminUser = Depends(require_super_admin),
 ):
     await delete_banner(db, banner_id)
+    return {
+        "message": "Banner permanently deleted successfully",
+        "banner_id": banner_id,
+    }
