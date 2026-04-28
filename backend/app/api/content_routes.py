@@ -19,6 +19,7 @@ from backend.app.services.content_service import (
     deactivate_banner,
     delete_banner,
     get_active_banners,
+    get_all_banners,
     get_background,
     replace_background,
     save_content_image,
@@ -49,6 +50,14 @@ async def write_background(
 @router.get("/banners", response_model=list[BannerResponse])
 def read_banners(db: Session = Depends(get_db)):
     return get_active_banners(db)
+
+
+@router.get("/banners/all", response_model=list[BannerResponse])
+def read_all_banners(
+    db: Session = Depends(get_db),
+    admin: AdminUser = Depends(require_super_admin),
+):
+    return get_all_banners(db)
 
 
 @router.post("/banners", response_model=BannerResponse, status_code=status.HTTP_201_CREATED)

@@ -131,6 +131,25 @@ def _invalidate_banners_cache() -> None:
         pass  # Cache miss on next request is acceptable
 
 
+def get_all_banners(db: Session) -> list[dict]:
+    rows = (
+        db.query(WebsiteBanner)
+        .order_by(WebsiteBanner.is_active.desc(), WebsiteBanner.priority.asc())
+        .all()
+    )
+    return [
+        {
+            "id": str(row.id),
+            "title": row.title,
+            "image_url": row.image_url,
+            "destination_code": row.destination_code,
+            "priority": row.priority,
+            "is_active": row.is_active,
+        }
+        for row in rows
+    ]
+
+
 def get_active_banners(db: Session) -> list[dict]:
     try:
         cached = redis_client.get(_BANNERS_CACHE_KEY)
