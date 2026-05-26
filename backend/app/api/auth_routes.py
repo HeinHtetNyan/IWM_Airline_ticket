@@ -106,9 +106,15 @@ def customer_login(
     email = payload.email.lower().strip()
 
     user = db.query(CustomerUser).filter(CustomerUser.email == email).first()
-    if not user or not verify_password(payload.password, user.password_hash):
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address",
+        )
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please try again",
         )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive")
@@ -145,9 +151,15 @@ def customer_token(
     password = form_data.password
 
     user = db.query(CustomerUser).filter(CustomerUser.email == email).first()
-    if not user or not verify_password(password, user.password_hash):
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with this email address",
+        )
+    if not verify_password(password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password. Please try again",
         )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="User is inactive")
