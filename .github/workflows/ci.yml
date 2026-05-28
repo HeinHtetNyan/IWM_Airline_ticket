@@ -1,0 +1,124 @@
+name: CI - Test  Code
+
+on:
+  push:
+    branches: [main, Bug_Fix_V1]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Smoke Tests & Docker Build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run smoke tests
+        run: |
+          python -m pytest backend/tests/test_smoke.py -v --tb=short
+        env:
+          PYTHONPATH: .
+          ENVIRONMENT: test
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+          POSTGRES_DBNAME: testdb
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_PASSWORD: ""
+          JWT_SECRET: test-secret-key-for-ci-only-not-production
+          ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: 60
+          CANCELLED_BOOKING_DELETE_DAYS: 7
+          CORS_ALLOW_ORIGINS: http://localhost:3000
+          FLIGHT_CACHE_TTL: 900
+          TRUSTED_PROXY_CIDRS: 127.0.0.1/32
+          STORAGE_TYPE: local
+          UPLOAD_DIR: ./uploads
+          TICKET_API_KEY: "test-ticket-api-key"
+          CURRENCY_API_KEY: "test-currency-api-key"
+          MAILTRAP_API_TOKEN: "test-mailtrap-token"
+
+      - name: Test Docker build
+        run: |
+          docker build -f infra/Dockerfile -t test-backend .
+
+      - name: Validate docker-compose
+        run: |
+          cat > .env << 'EOF'
+          ENVIRONMENT=development
+          JWT_SECRET=ci-dummy-secret
+          ALGORITHM=HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES=60
+          CANCELLED_BOOKING_DELETE_DAYS=7
+          CORS_ALLOW_ORIGINS=http://localhost:3000
+          FLIGHT_CACHE_TTL=900
+          TRUSTED_PROXY_CIDRS=127.0.0.1/32
+          STORAGE_TYPE=local
+          UPLOAD_DIR=/app/uploads
+          MAILTRAP_API_TOKEN=ci-dummy-token
+          POSTGRES_USER=testuser
+          POSTGRES_PASSWORD=testpass
+          POSTGRES_DB=testdb
+          REDIS_PASSWORD=
+          BACKEND_PORT=8000
+          POSTGRES_HOST_PORT=5433
+          NGINX_PORT=8080
+          EOF
+          cp .env .env.test
+          cd infra
+          docker compose config
+
+      
+      - name: Build and push image to Docker Hub
+        if: github.event_name == 'push'
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+          docker build -f infra/Dockerfile -t flyqm/air_ticket:${{ github.sha }} .
+          docker push flyqm/air_ticket:${{ github.sha }}

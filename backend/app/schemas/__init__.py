@@ -1,1 +1,1 @@
-#from app.schemas.flight import FlightCreate, FlightUpdate, FlightOut
+# from backend.app.schemas.flight import FlightCreate, FlightUpdate, FlightOut

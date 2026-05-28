@@ -1,0 +1,12 @@
+docker compose --env-file ../.env down -v  (remove volumes/ all database data will be lost)
+docker compose --env-file ../.env up -d --build (build)
+docker compose --env-file ../.env up -d
+docker compose --env-file ../.env logs -f (logs)
+docker compose --env-file ../.env ps (check status)
+
+
+docker compose --env-file ../.env -f docker-compose.yml down (.env path is not working)
+docker compose --env-file ../.env -f docker-compose.yml up -d --build
+docker compose --env-file ../.env -f docker-compose.yml logs -f
+docker compose --env-file ../.env -f docker-compose.yml ps
+

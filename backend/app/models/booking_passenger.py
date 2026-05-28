@@ -6,16 +6,22 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
-from app.db.base import Base
+from backend.app.db.base import Base
 
 
 class BookingPassenger(Base):
     __tablename__ = "booking_passengers"
+    __table_args__ = (
+        UniqueConstraint(
+            "booking_id", "passport_number", name="uq_booking_passenger_passport"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

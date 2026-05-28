@@ -1,136 +1,233 @@
-from typing import List, Dict
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from typing import Any
+
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
 
-from app.models.flight_override import FlightOverride
-from app.models.exchange_rate import ExchangeRate
-
-
-GLOBAL_MARKUP_PERCENT = 15
+from backend.app.models.exchange_rate import ExchangeRate
+from backend.app.services.price_override_service import get_active_price_override
+from backend.app.services.pricing_config_service import get_global_markup
 
 
-# ONE WAY PRICING
-def apply_pricing_logic(
-    db: Session,
-    api_flights: List[Dict],
-    adults: int = 1
-) -> List[Dict]:
+def _quantize_money(v: Decimal) -> Decimal:
+    return v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
-    final_flights: List[Dict] = []
 
-    exchange = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
-
-    if not exchange:
-        raise Exception("Exchange rate not configured")
-
-    usd_to_mmk = exchange.usd_to_mmk
-
-    for flight in api_flights:
-
-        base_price_usd = flight["base_price_usd"]
-
-        airline_code = flight["airline_code"]
-        flight_number = flight["flight_number"]
-
-        departure_time_str = flight["departure_time"]
-        departure_date = datetime.fromisoformat(
-            departure_time_str
-        ).date()
-
-        # System price per passenger
-        system_price_usd = base_price_usd * (1 + GLOBAL_MARKUP_PERCENT / 100)
-
-        override = (
-            db.query(FlightOverride)
-            .filter(
-                FlightOverride.airline_code == airline_code,
-                FlightOverride.flight_number == flight_number,
-                FlightOverride.departure_date == departure_date,
-            )
-            .first()
+def _to_decimal(value: Any, *, field: str) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field} in flight_snapshot"
         )
 
-        if override:
-            final_price_per_pax_usd = max(system_price_usd, override.override_price_usd)
-        else:
-            final_price_per_pax_usd = system_price_usd
 
-        final_price_per_pax_usd = round(final_price_per_pax_usd, 2)
+def _get_exchange_rate(db: Session) -> Decimal:
+    exchange = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
+    if not exchange or exchange.usd_to_mmk <= 0:
+        raise HTTPException(
+            status_code=500, detail="System configuration error: exchange rate not set"
+        )
+    return Decimal(str(exchange.usd_to_mmk))
 
-        # MULTIPLY BY ADULTS
-        total_price_usd = round(final_price_per_pax_usd * adults, 2)
-        total_price_mmk = round(total_price_usd * usd_to_mmk, 2)
 
-        price_estimate_min_usd = round(total_price_usd * 0.9, 2)
-        price_estimate_max_usd = round(total_price_usd * 1.1, 2)
+def _get_markup_price(base_price_usd: Decimal, markup_percentage: Decimal) -> Decimal:
+    # VERIFIED: markup applied once at pricing calculation
+    return _quantize_money(
+        base_price_usd * (Decimal("1") + (markup_percentage / Decimal("100")))
+    )
 
-        price_estimate_min_mmk = round(price_estimate_min_usd * usd_to_mmk, 2)
-        price_estimate_max_mmk = round(price_estimate_max_usd * usd_to_mmk, 2)
 
-        flight["base_price_usd"] = round(base_price_usd, 2)
+def _get_override_price(
+    db: Session,
+    airline_code: str | None,
+    flight_number: str | None,
+    departure_date: date | None,
+) -> Decimal | None:
+    override = get_active_price_override(
+        db, airline_code, flight_number, departure_date
+    )
+    if override is None:
+        return None
+    return _quantize_money(Decimal(str(override.override_price_usd)))
+
+
+def _calc_final_price(
+    db: Session,
+    base_price_usd: Decimal,
+    airline_code: str | None,
+    flight_number: str | None,
+    departure_date: date | None,
+    markup_percentage: Decimal,
+) -> Decimal:
+    override_price_usd = _get_override_price(
+        db, airline_code, flight_number, departure_date
+    )
+    if override_price_usd is not None:
+        return override_price_usd
+    return _get_markup_price(base_price_usd, markup_percentage)
+
+
+def _calc_round_trip_final_price(
+    base_price_usd: Decimal,
+    markup_percentage: Decimal,
+) -> Decimal:
+    # Round-trip pricing should not reuse one-way price overrides.
+    return _get_markup_price(base_price_usd, markup_percentage)
+
+
+def _extract_departure_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def _resolve_flight_override_keys(
+    flight: dict[str, Any],
+) -> tuple[str | None, str | None, date | None]:
+    departure_time = _extract_departure_date(flight.get("departure_time"))
+    if departure_time is None:
+        return None, None, None
+    return (
+        flight.get("airline_code"),
+        flight.get("flight_number"),
+        departure_time.date(),
+    )
+
+
+def apply_pricing_logic(
+    db: Session, api_flights: list[dict[str, Any]], adults: int = 1
+) -> list[dict[str, Any]]:
+    usd_to_mmk = _get_exchange_rate(db)
+    markup_percentage = get_global_markup(db)
+    final_flights: list[dict[str, Any]] = []
+
+    for flight in api_flights:
+        try:
+            base_price_usd = Decimal(str(flight["base_price_usd"]))
+        except (KeyError, InvalidOperation, TypeError, ValueError):
+            continue
+
+        airline_code, flight_number, departure_date = _resolve_flight_override_keys(
+            flight
+        )
+
+        final_price_per_pax_usd = _calc_final_price(
+            db,
+            base_price_usd,
+            airline_code,
+            flight_number,
+            departure_date,
+            markup_percentage,
+        )
+        total_price_usd = _quantize_money(final_price_per_pax_usd * Decimal(adults))
+        total_price_mmk = _quantize_money(total_price_usd * usd_to_mmk)
+
+        flight["base_price_usd"] = float(_quantize_money(base_price_usd))
         flight["adults"] = adults
-        flight["final_price_usd"] = total_price_usd
-        flight["final_price_mmk"] = total_price_mmk
-        flight["price_estimate_min_usd"] = price_estimate_min_usd
-        flight["price_estimate_max_usd"] = price_estimate_max_usd
-        flight["price_estimate_min_mmk"] = price_estimate_min_mmk
-        flight["price_estimate_max_mmk"] = price_estimate_max_mmk
+        flight["final_price_usd"] = float(total_price_usd)
+        flight["final_price_mmk"] = float(total_price_mmk)
+        flight["price_estimate_min_usd"] = float(
+            _quantize_money(total_price_usd * Decimal("0.9"))
+        )
+        flight["price_estimate_max_usd"] = float(
+            _quantize_money(total_price_usd * Decimal("1.1"))
+        )
+        flight["price_estimate_min_mmk"] = float(
+            _quantize_money(Decimal(str(flight["price_estimate_min_usd"])) * usd_to_mmk)
+        )
+        flight["price_estimate_max_mmk"] = float(
+            _quantize_money(Decimal(str(flight["price_estimate_max_usd"])) * usd_to_mmk)
+        )
         flight["requires_admin_confirmation"] = True
-
         final_flights.append(flight)
 
     return final_flights
 
 
-# ROUND TRIP PRICING
 def apply_round_trip_pricing_logic(
-    db: Session,
-    bundles: List[Dict],
-    adults: int = 1
-) -> List[Dict]:
-
-    exchange = db.query(ExchangeRate).filter(ExchangeRate.id == 1).first()
-
-    if not exchange:
-        raise Exception("Exchange rate not configured")
-
-    usd_to_mmk = exchange.usd_to_mmk
-
-    final_results = []
+    db: Session, bundles: list[dict[str, Any]], adults: int = 1
+) -> list[dict[str, Any]]:
+    usd_to_mmk = _get_exchange_rate(db)
+    markup_percentage = get_global_markup(db)
+    final_results: list[dict[str, Any]] = []
 
     for bundle in bundles:
+        try:
+            base_price_usd = Decimal(str(bundle["base_price_usd"]))
+        except (KeyError, InvalidOperation, TypeError, ValueError):
+            continue
 
-        base_price_usd = bundle["base_price_usd"]
+        final_price_per_pax_usd = _calc_round_trip_final_price(
+            base_price_usd,
+            markup_percentage,
+        )
+        total_price_usd = _quantize_money(final_price_per_pax_usd * Decimal(adults))
+        total_price_mmk = _quantize_money(total_price_usd * usd_to_mmk)
 
-        # price per passenger
-        final_price_per_pax_usd = base_price_usd * (1 + GLOBAL_MARKUP_PERCENT / 100)
-        final_price_per_pax_usd = round(final_price_per_pax_usd, 2)
-
-        # MULTIPLY
-        total_price_usd = round(final_price_per_pax_usd * adults, 2)
-        total_price_mmk = round(total_price_usd * usd_to_mmk, 2)
-
-        price_estimate_min_usd = round(total_price_usd * 0.9, 2)
-        price_estimate_max_usd = round(total_price_usd * 1.1, 2)
-
-        price_estimate_min_mmk = round(price_estimate_min_usd * usd_to_mmk, 2)
-        price_estimate_max_mmk = round(price_estimate_max_usd * usd_to_mmk, 2)
-
-        result = {
-            "bundle_key": bundle["bundle_key"],
-            "adults": adults,
-            "outbound": bundle["outbound"],
-            "inbound": bundle["inbound"],
-            "base_price_usd": base_price_usd,
-            "final_price_usd": total_price_usd,
-            "final_price_mmk": total_price_mmk,
-            "price_estimate_min_usd": price_estimate_min_usd,
-            "price_estimate_max_usd": price_estimate_max_usd,
-            "price_estimate_min_mmk": price_estimate_min_mmk,
-            "price_estimate_max_mmk": price_estimate_max_mmk,
-            "requires_admin_confirmation": True,
-        }
-
-        final_results.append(result)
+        final_results.append(
+            {
+                "bundle_key": bundle.get("bundle_key"),
+                "adults": adults,
+                "outbound": bundle.get("outbound"),
+                "inbound": bundle.get("inbound"),
+                "base_price_usd": float(_quantize_money(base_price_usd)),
+                "final_price_usd": float(total_price_usd),
+                "final_price_mmk": float(total_price_mmk),
+                "price_estimate_min_usd": float(
+                    _quantize_money(total_price_usd * Decimal("0.9"))
+                ),
+                "price_estimate_max_usd": float(
+                    _quantize_money(total_price_usd * Decimal("1.1"))
+                ),
+                "price_estimate_min_mmk": float(
+                    _quantize_money(total_price_mmk * Decimal("0.9"))
+                ),
+                "price_estimate_max_mmk": float(
+                    _quantize_money(total_price_mmk * Decimal("1.1"))
+                ),
+                "requires_admin_confirmation": True,
+            }
+        )
 
     return final_results
+
+
+def calculate_booking_totals(
+    db: Session,
+    snapshot: dict[str, Any],
+    adults: int,
+    booking_type: str,
+) -> dict[str, Decimal]:
+    usd_to_mmk = _get_exchange_rate(db)
+    markup_percentage = get_global_markup(db)
+    base_price_usd = _to_decimal(snapshot.get("base_price_usd"), field="base_price_usd")
+
+    if booking_type == "ONE_WAY":
+        departure_time = _extract_departure_date(snapshot.get("departure_time"))
+        airline_code = snapshot.get("airline_code")
+        flight_number = snapshot.get("flight_number")
+        final_price_per_pax_usd = _calc_final_price(
+            db,
+            base_price_usd,
+            airline_code,
+            flight_number,
+            departure_time.date() if departure_time else None,
+            markup_percentage,
+        )
+    else:
+        final_price_per_pax_usd = _calc_round_trip_final_price(
+            base_price_usd,
+            markup_percentage,
+        )
+    total_price_usd = _quantize_money(final_price_per_pax_usd * Decimal(adults))
+    total_price_mmk = _quantize_money(total_price_usd * usd_to_mmk)
+    return {
+        "base_price_usd": _quantize_money(base_price_usd),
+        "final_price_usd": total_price_usd,
+        "final_price_mmk": total_price_mmk,
+    }

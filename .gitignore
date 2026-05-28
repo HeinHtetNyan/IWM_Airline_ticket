@@ -1,8 +1,35 @@
+# Secrets 
 .env
+.env.local
+.env.production
+.env.staging
+
+# Python
 __pycache__/
 *.pyc
-.env.local
-.vscode/
-node_modules/
-postgres_data/
 venv/
+*.log
+
+# Docker volumes (data)
+postgres_data/
+redis_data/
+prometheus_data/
+grafana_data/
+
+# IDE
+.vscode/
+.idea/
+
+# Frontend
+node_modules/
+frontend/build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+#ticket files
+uploads/
+
+# Keep example file
+!.env.example

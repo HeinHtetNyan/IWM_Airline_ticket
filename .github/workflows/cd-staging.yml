@@ -1,0 +1,86 @@
+name: CD - Deploy to Staging
+
+on:
+  workflow_run:
+    workflows: ["CI - Test  Code"]   
+    branches: [Bug_Fix_V1]
+    types: [completed]
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: 22
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            IMAGE="flyqm/air_ticket:${{ github.event.workflow_run.head_sha }}"
+            DEPLOY_DIR="/home/devuser/staging"
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.staging --project-name airline-staging"
+
+            echo ">>> Deploying $IMAGE to staging"
+            cd "$DEPLOY_DIR"
+
+            # Pull latest code from Bug_Fix_V1
+            git fetch origin Bug_Fix_V1
+            git reset --hard origin/Bug_Fix_V1
+
+            # Pull the new image that CI just built and pushed
+            docker pull "$IMAGE"
+
+            # Remember what image is currently running (for rollback)
+            PREVIOUS_IMAGE=$(docker inspect airline-staging-backend-1 --format='{{.Config.Image}}' 2>/dev/null || echo "")
+            echo "Previous: $PREVIOUS_IMAGE"
+            echo "New:      $IMAGE"
+
+            # Start db and redis first if not already running
+            TAG=${{ github.event.workflow_run.head_sha }} \
+            $COMPOSE up -d db redis
+
+            # Wait for db and redis to be healthy
+            sleep 10
+
+            # Deploy the new backend (only restarts backend, leaves db+redis alone)
+            TAG=${{ github.event.workflow_run.head_sha }} \
+            $COMPOSE up -d --no-deps --no-build backend nginx
+
+            # Health check — try 30 times with 2 second gaps = 60 seconds total
+            echo ">>> Checking staging health..."
+            HEALTHY=false
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8081/api/health > /dev/null 2>&1; then
+                echo "Healthy after $i attempts!"
+                HEALTHY=true
+                break
+              fi
+              echo "  Attempt $i/30 not ready yet, waiting..."
+              sleep 2
+            done
+
+            # If still not healthy after 60 seconds, roll back
+            if [ "$HEALTHY" = "false" ]; then
+              echo ">>> Health check failed! Rolling back..."
+              if [ -n "$PREVIOUS_IMAGE" ]; then
+                PREV_TAG="${PREVIOUS_IMAGE##*:}"
+                TAG="$PREV_TAG" $COMPOSE up -d --no-deps --no-build backend nginx
+                echo "Rolled back to $PREVIOUS_IMAGE"
+              else
+                echo "No previous image found, cannot roll back"
+              fi
+              $COMPOSE logs --tail=50 backend
+              exit 1
+            fi
+
+            # Clean up images older than 72 hours
+            docker image prune -f --filter "until=72h"
+            echo ">>> Staging deployment done: $IMAGE"

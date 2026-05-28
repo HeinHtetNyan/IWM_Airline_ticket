@@ -1,67 +1,40 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db
-from app.auth.deps import get_current_customer
-from app.models.customer_user import CustomerUser
-from app.models.customer_contact import CustomerContact
-from app.schemas.contact import ContactCreate, ContactOut
+from backend.app.auth.deps import get_current_customer
+from backend.app.db.deps import get_db
+from backend.app.models.customer_user import CustomerUser
+from backend.app.schemas.contact import ContactCreate, ContactOut, ContactUpdate
+from backend.app.services.contact_service import (
+    create_my_contact,
+    get_my_contact_or_404,
+    update_my_contact,
+)
 
 router = APIRouter(prefix="/contact", tags=["contact"])
 
 
-# Create or Update Contact
-@router.post("/", response_model=ContactOut)
-def create_or_update_contact(
+@router.post("/", response_model=ContactOut, status_code=status.HTTP_201_CREATED)
+def create_contact(
     payload: ContactCreate,
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
 ):
-
-    contact = (
-        db.query(CustomerContact)
-        .filter(CustomerContact.customer_id == current_user.id)
-        .first()
-    )
-
-    if contact:
-        # Update existing
-        contact.given_name = payload.given_name
-        contact.last_name = payload.last_name
-        contact.email = payload.email
-        contact.country_of_residence = payload.country_of_residence
-        contact.phone_number = payload.phone_number
-    else:
-        contact = CustomerContact(
-            customer_id=current_user.id,
-            given_name=payload.given_name,
-            last_name=payload.last_name,
-            email=payload.email,
-            country_of_residence=payload.country_of_residence,
-            phone_number=payload.phone_number,
-        )
-        db.add(contact)
-
-    db.commit()
-    db.refresh(contact)
-
-    return contact
+    return create_my_contact(db, current_user.id, payload)
 
 
-# Get My Contact
 @router.get("/me", response_model=ContactOut)
 def get_my_contact(
     db: Session = Depends(get_db),
     current_user: CustomerUser = Depends(get_current_customer),
 ):
+    return get_my_contact_or_404(db, current_user.id)
 
-    contact = (
-        db.query(CustomerContact)
-        .filter(CustomerContact.customer_id == current_user.id)
-        .first()
-    )
 
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
-
-    return contact
+@router.put("/me", response_model=ContactOut)
+def update_contact_me(
+    payload: ContactUpdate,
+    db: Session = Depends(get_db),
+    current_user: CustomerUser = Depends(get_current_customer),
+):
+    return update_my_contact(db, current_user.id, payload)

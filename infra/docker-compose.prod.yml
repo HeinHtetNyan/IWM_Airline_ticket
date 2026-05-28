@@ -1,0 +1,24 @@
+services:
+  nginx:
+    ports:
+      - "8080:80"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
+  grafana:
+    ports:
+      - "3003:3000"
+
+volumes:
+  postgres_data:
+    name: prod_postgres_data
+  redis_data:
+    name: prod_redis_data
+  prometheus_data:
+    name: prod_prometheus_data
+  grafana_data:
+    name: prod_grafana_data
+  uploads_data:
+    name: prod_uploads_data

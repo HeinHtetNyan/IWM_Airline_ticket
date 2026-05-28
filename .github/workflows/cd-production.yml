@@ -1,0 +1,85 @@
+name: CD - Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["CI - Test  Code"]   # must match your CI name exactly
+    branches: [main]
+    types: [completed]
+
+jobs:
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: 22
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+
+            IMAGE="flyqm/air_ticket:${{ github.event.workflow_run.head_sha }}"
+            DEPLOY_DIR="/home/devuser/production"
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.prod --project-name airline-prod"
+
+            echo ">>> Deploying $IMAGE to production"
+            cd "$DEPLOY_DIR"
+
+            # Pull latest code from main
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Pull the new image
+            docker pull "$IMAGE"
+
+            # Remember current image for rollback
+            PREVIOUS_IMAGE=$(docker inspect airline-prod-backend-1 --format='{{.Config.Image}}' 2>/dev/null || echo "")
+            echo "Previous: $PREVIOUS_IMAGE"
+            echo "New:      $IMAGE"
+
+            # Start db and redis first if not already running
+            TAG=${{ github.event.workflow_run.head_sha }} \
+            $COMPOSE up -d db redis
+
+            # Wait for db and redis to be healthy
+            sleep 10
+
+            # Deploy new backend only
+            TAG=${{ github.event.workflow_run.head_sha }} \
+            $COMPOSE up -d --no-deps --no-build backend nginx
+
+            # Health check — 60 seconds total
+            echo ">>> Checking production health..."
+            HEALTHY=false
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then
+                echo "Healthy after $i attempts!"
+                HEALTHY=true
+                break
+              fi
+              echo "  Attempt $i/30 not ready yet, waiting..."
+              sleep 2
+            done
+
+            # Roll back if unhealthy
+            if [ "$HEALTHY" = "false" ]; then
+              echo ">>> Health check failed! Rolling back..."
+              if [ -n "$PREVIOUS_IMAGE" ]; then
+                PREV_TAG="${PREVIOUS_IMAGE##*:}"
+                TAG="$PREV_TAG" $COMPOSE up -d --no-deps --no-build backend nginx
+                echo "Rolled back to $PREVIOUS_IMAGE"
+              else
+                echo "No previous image found, cannot roll back"
+              fi
+              $COMPOSE logs --tail=100 backend
+              exit 1
+            fi
+
+            docker image prune -f --filter "until=72h"
+            echo ">>> Production deployment done: $IMAGE"

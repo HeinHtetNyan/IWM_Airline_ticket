@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, Dict, Any
-from pydantic import field_validator
+from typing import Any, Dict
+
+from pydantic import BaseModel, EmailStr, field_validator
 
 
 class TokenOut(BaseModel):
@@ -8,56 +8,92 @@ class TokenOut(BaseModel):
     token_type: str = "bearer"
     user: Dict[str, Any]
 
-class CustomerSignupIn(BaseModel):
-    email: str
+
+class _AuthBase(BaseModel):
+    email: EmailStr
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: EmailStr) -> str:
+        return str(v).strip().lower()
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+
+        # bcrypt limit
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
+        return v
+
+
+class CustomerSignupIn(_AuthBase):
     full_name: str
     phone: str
 
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, v: str) -> str:
-        v = v.strip().lower()
-        if "@" not in v or "." not in v:
-            raise ValueError("Invalid email")
-        return v
 
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        if len(v.encode("utf-8")) > 72:
-            raise ValueError("Password too long (max 72 bytes)")
-        return v
+class LoginIn(_AuthBase):
+    pass
 
-class LoginIn(BaseModel):
-    email: str
-    password: str
+
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
 
     @field_validator("email")
     @classmethod
-    def validate_email(cls, v: str) -> str:
-        v = v.strip().lower()
-        if "@" not in v or "." not in v:
-            raise ValueError("Invalid email")
-        return v
+    def normalize_email(cls, v: EmailStr) -> str:
+        return str(v).strip().lower()
 
-    @field_validator("password")
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: EmailStr) -> str:
+        return str(v).strip().lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
     @classmethod
     def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
         if len(v.encode("utf-8")) > 72:
-            raise ValueError("Password too long (max 72 bytes)")
+            raise ValueError("Password cannot exceed 72 bytes")
         return v
 
-# Admin
-class AdminSignupRequest(BaseModel):
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+        return v
+
+
+class AdminSignupRequest(_AuthBase):
     name: str
-    email: str
-    password: str
     role: str = "STAFF"
 
-class AdminLoginRequest(BaseModel):
-    email: str
-    password: str
 
 class AdminOut(BaseModel):
     id: str

@@ -1,14 +1,56 @@
-fastapi
-uvicorn
-sqlalchemy
-psycopg2-binary
-python-dotenv
-pydantic-settings
-passlib[bcrypt]==1.7.4
-python-jose[cryptography]
-bcrypt==4.0.1
-python-multipart
-httpx
-requests
-email-validator
-apscheduler==3.11.2
+# requirements.txt
+# ────────────────────────────────────────────────────────────────
+# Core web framework & server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.6
+
+# Database & async support
+sqlalchemy>=2.0.35
+asyncpg>=0.30.0               # async PostgreSQL driver
+psycopg2-binary>=2.9.9        # sync PostgreSQL driver (useful for alembic, scripts)
+
+# Migrations
+alembic>=1.13.3
+
+# Configuration & environment
+python-dotenv>=1.0.1
+pydantic>=2.9.2
+pydantic-settings>=2.5.2
+
+#redis
+redis>=5.0.0
+
+# Authentication & security
+passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1                 # must be exactly 4.0.1 to avoid compatibility issues with passlib
+python-jose[cryptography]>=3.3.0
+pyjwt>=2.8.0
+
+# HTTP clients
+httpx>=0.27.0
+requests>=2.32.3
+boto3>=1.35.0
+
+# File uploads / form data
+python-multipart>=0.0.9
+
+# Email & validation
+email-validator>=2.2.0
+jinja2>=3.1.4
+
+# Scheduling / background tasks
+apscheduler>=3.11.2,<4.0
+
+# Timezone data (required by zoneinfo on slim Docker images)
+tzdata>=2024.1
+
+# Utilities & compatibility
+anyio>=4.6.0
+typing-extensions>=4.12.0
+
+#test
+pytest==7.4.3
+pytest-cov==4.1.0
+
+prometheus-fastapi-instrumentator>=6.1.0
+mailtrap>=2.5.0

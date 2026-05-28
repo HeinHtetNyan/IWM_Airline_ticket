@@ -1,0 +1,44 @@
+# Staging overrides
+# Differences from base: uses pre-built image, staging ports, staging named volumes
+services:
+  backend:
+    build: !reset null
+    image: flyqm/air_ticket:${TAG}
+    env_file:
+      - ../.env.staging
+    volumes:
+      - uploads_data:/app/uploads
+
+  db:
+    ports:
+      - "5434:5432"
+
+  nginx:
+    ports:
+      - "8081:80"
+
+  prometheus:
+    ports:
+      - "9091:9090"
+
+  grafana:
+    ports:
+      - "3004:3000"
+
+  test_runner:
+    profiles:
+      - never
+
+volumes:
+  postgres_data:
+    name: staging_postgres_data
+  redis_data:
+    name: staging_redis_data
+  prometheus_data:
+    name: staging_prometheus_data
+  grafana_data:
+    name: staging_grafana_data
+  uploads_data:
+    name: staging_uploads_data
+  test_results:
+    name: staging_test_results

@@ -1,12 +1,19 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from jose import JWTError, jwt
+from jose import jwt
+from jose.exceptions import ExpiredSignatureError, JWTError
 
-from app.core.config import settings
+from backend.app.core.config import settings
 
 
-def create_access_token(subject: str, role: str, expires_minutes: Optional[int] = None) -> str:
+class TokenExpiredError(JWTError):
+    """Raised when an access token is structurally valid but expired."""
+
+
+def create_access_token(
+    subject: str, role: str, expires_minutes: Optional[int] = None
+) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -15,12 +22,11 @@ def create_access_token(subject: str, role: str, expires_minutes: Optional[int] 
         "role": role,
         "exp": expire,
     }
-    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.ALGORITHM)
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-    """
-    Returns the decoded payload dict (sub, role, exp...).
-    Raises JWTError if invalid/expired.
-    """
-    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    try:
+        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.ALGORITHM])
+    except ExpiredSignatureError as exc:
+        raise TokenExpiredError("Token has expired") from exc
