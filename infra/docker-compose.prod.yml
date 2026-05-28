@@ -1,4 +1,18 @@
+# Production overrides
+# Differences from base: uses pre-built image, production ports, production named volumes
 services:
+  backend:
+    build: !reset null
+    image: flyqm/air_ticket:${TAG}
+    env_file:
+      - ../.env.prod
+    volumes:
+      - uploads_data:/app/uploads
+
+  db:
+    ports:
+      - "5432:5432"
+
   nginx:
     ports:
       - "8080:80"
@@ -11,6 +25,10 @@ services:
     ports:
       - "3003:3000"
 
+  test_runner:
+    profiles:
+      - never
+
 volumes:
   postgres_data:
     name: prod_postgres_data
@@ -22,3 +40,5 @@ volumes:
     name: prod_grafana_data
   uploads_data:
     name: prod_uploads_data
+  test_results:
+    name: prod_test_results

@@ -26,7 +26,7 @@ jobs:
 
             IMAGE="flyqm/air_ticket:${{ github.event.workflow_run.head_sha }}"
             DEPLOY_DIR="/home/devuser/production"
-            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.staging.yml --env-file .env.prod --project-name airline-prod"
+            COMPOSE="docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod --project-name airline-prod"
 
             echo ">>> Deploying $IMAGE to production"
             cd "$DEPLOY_DIR"

@@ -3,6 +3,9 @@
 .env.local
 .env.production
 .env.staging
+.env.prod
+.env.test
+.env.ci
 
 # Python
 __pycache__/
