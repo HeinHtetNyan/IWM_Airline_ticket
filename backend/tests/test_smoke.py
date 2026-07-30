@@ -15,7 +15,7 @@ from backend.app.main import app
 client = TestClient(app)
 
 
-# ── App startup 
+# App startup
 
 def test_health_check():
     """App is running and healthy."""
@@ -33,7 +33,7 @@ def test_root_endpoint():
     assert "message" in response.json()
 
 
-# ── API surface
+# API surface
 
 def test_api_docs_load():
     """Swagger UI loads — proves all routes registered without import errors."""
@@ -51,7 +51,7 @@ def test_openapi_schema_valid():
     assert "info" in data
 
 
-# ── Error handling 
+# Error handling
 
 def test_unknown_route_returns_404_not_500():
     """Unknown routes return 404, not a server crash."""
@@ -59,7 +59,7 @@ def test_unknown_route_returns_404_not_500():
     assert response.status_code == 404
 
 
-# ── Auth
+# Auth
 
 def test_protected_endpoint_requires_auth():
     """Protected endpoints reject unauthenticated requests with 401."""
